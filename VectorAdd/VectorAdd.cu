@@ -2,10 +2,25 @@
 #include <time.h>
 
 #define N 100000000
+#define THREADS_PER_BLOCK 512  
 
-__global__ void gpu_add(int *a, int *b, int *c)
+__global__ void gpu_block_add(int *a, int *b, int *c)
 {
 	c[blockIdx.x] = a[blockIdx.x] + b[blockIdx.x];
+}
+
+__global__ void gpu_thread_add(int *a, int *b, int *c)
+{
+	c[threadIdx.x] = a[threadIdx.x] + b[threadIdx.x];
+}
+
+__global__ void gpu_both_add(int *a, int *b, int *c, int n)
+{
+	int index = threadIdx.x + blockIdx.x * blockDim.x;
+	if (index < n)
+	{
+		c[index] = a[index] + b[index];
+	} 
 }
 
 void cpu_add(int *a, int *b, int *c, long n)
@@ -29,8 +44,8 @@ int main(void)
 	int *a, *b, *c;
 	int *d_a, *d_b, *d_c;
 	long size = sizeof(int)*N;
-	clock_t initial, final, initial2, final2;
-	double elapsed, elapsed2;
+	clock_t initial, final;
+	double elapsed;
 
 	//Allocate space on host for copies of a, b, and c
 	a = (int *)malloc(size);
@@ -45,38 +60,50 @@ int main(void)
 	//Initialize a and b with random values
 	random_array(a, N);
 	random_array(b, N);
-
-	//Initial time for entire device operation (host -> device, kernel execution, device -> host)
-	initial = clock();
 	
 	//Copy a and b to device
 	cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
 
-	//Initial time for kernel execution
-	initial2 = clock();
+	//Wait for copy to finish before trying to time anything
+	cudaDeviceSynchronize();
 
-	//Add a and b in parallel
-	gpu_add<<<N,1>>>(d_a, d_b, d_c);
-	cudaThreadSynchronize(); //Hangs up until device has finished (to get more accurate reading of time for kernel execution)
+	//Comparing only the time taken for the actual addition
+	//Ignoring the time taken to copy vectors to and from device
 
-	final2 = clock();
-	
-	//Copy result back to device
-	cudaMemcpy(d_c, c, size, cudaMemcpyDeviceToHost);
+	printf("\nCPU vs. GPU: Adding Two %dx1 Vectors\n", N);
+	printf("=================================================\n");
+
+	//Add a and b on the device in parallel using only blocks
+	initial = clock();
+	gpu_block_add<<<N,1>>>(d_a, d_b, d_c);
+	cudaDeviceSynchronize(); //Hangs up until device has finished (to get more accurate reading of time for kernel execution)
 	final = clock();
-
 	elapsed = (double)(final - initial) / CLOCKS_PER_SEC;
-	elapsed2 = (double)(final2 - initial2) / CLOCKS_PER_SEC;
-	printf("\nCopying vectors A and B, each of size %d, to the GPU, adding them in parallel on the GPU, and copying the result back to the host took %f seconds.\n", N, elapsed);
-	printf("The addition took only %f seconds.\n\n", elapsed2);
+	printf("GPU blocks only:\t\t%.3e seconds\n", elapsed);
 
+	//Add a and b on the device in parallel using only threads
+	initial = clock();
+	gpu_thread_add<<<1,N>>>(d_a, d_b, d_c);
+	cudaDeviceSynchronize();
+	final = clock();
+	elapsed = (double)(final - initial) / CLOCKS_PER_SEC;
+	printf("GPU threads only:\t\t%.3e seconds\n", elapsed);
+
+	//Add a and b on the device in parallel using blocks and threads
+	initial = clock();
+	gpu_both_add<<<(N+THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK,THREADS_PER_BLOCK>>>(d_a, d_b, d_c, N);
+	cudaDeviceSynchronize();
+	final = clock();
+	elapsed = (double)(final - initial) / CLOCKS_PER_SEC;
+	printf("GPU blocks and threads:\t\t%.3e seconds\n", elapsed);
+
+	//Add a and b on the host
 	initial = clock();
 	cpu_add(a, b, c, N);
 	final = clock();
-
 	elapsed = (double)(final - initial) / CLOCKS_PER_SEC;
-	printf("Adding the same vectors A and B together took %f seconds on the CPU.\n\n", elapsed);
+	printf("CPU:\t\t\t\t%.3e seconds\n\n", elapsed);
 
 	//Free memory
 	free(a); free(b); free(c);

@@ -5,6 +5,8 @@
 #include <cuda_runtime_api.h>
 #include <stdio.h>
 
+#include <iostream>
+
 #define cudaCheckError(code) { cudaAssert((code), __FILE__, __LINE__); }
 inline void cudaAssert(cudaError_t code, const char *file, int line)
 {
@@ -37,6 +39,8 @@ GridInterface<GridCellType>::GridInterface(const std::size_t rows, const std::si
         m_h_grid = h_grid;
         cudaCheckError(cudaMemcpy(m_d_current_grid, m_h_grid, m_size, cudaMemcpyHostToDevice));
     }
+
+    std::cout << "pixels " << m_d_current_grid << " " << m_d_current_grid + m_size << std::endl;
 }
 
 template<typename GridCellType>

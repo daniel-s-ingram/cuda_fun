@@ -124,10 +124,10 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
         return Vec3f(0.2, 0.7, 0.8);
     }
 
-    float diffuse_light_intensity = 1.0;
+    float diffuse_light_intensity{0.0};
     for (std::size_t i = 0; i < num_lights; ++i) {
-        // const Vec3f light_dir = (lights[i].position - point).normalized();
-        // diffuse_light_intensity += lights[i].intensity * std::max(0.f, light_dir*N);
+        const Vec3f light_dir = (lights[i].position - point).normalized();
+        diffuse_light_intensity += lights[i].intensity * std::max(0.f, light_dir*N);
     }
     
     return material.diffuse_color * diffuse_light_intensity;
@@ -229,12 +229,12 @@ int main()
     populateGrid(h_grid, rows);
 
     std::vector<Sphere> spheres;
-    spheres.emplace_back(Vec3f{-3, -3, -10}, Material{Vec3f{0.5, 0, 0}}, 1);
+    spheres.emplace_back(Vec3f{-3, -3, -5}, Material{Vec3f{0.5, 0, 0}}, 1);
     spheres.emplace_back(Vec3f{-2, -8, -20}, Material{Vec3f{0.2, 0.7, 0}}, 4);
     spheres.emplace_back(Vec3f{-5, -5, -13}, Material{Vec3f{0.2, 0.2, 0.4}}, 2);
 
     std::vector<Light> lights;
-    //lights.emplace_back(Vec3f{-20, 20, 20}, 0.5);
+    lights.emplace_back(Vec3f{0, 0, 2}, 1.5);
 
     GridVisualizer grid_visualizer{rows, cols};
     std::unique_ptr<GridInterface<Vec3f>> tiny_ray_tracer = std::make_unique<TinyRayTracer>(rows, cols, h_grid, spheres, lights);

@@ -1,4 +1,5 @@
 #include <cuda_fun/GridInterface.hpp>
+#include <cuda_fun/Vector.hpp>
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>
@@ -46,5 +47,7 @@ GridInterface<GridCellType>::~GridInterface()
 }
 
 template class GridInterface<std::uint8_t>;
+template class GridInterface<float>;
+template class GridInterface<Vec3f>;
 
 }

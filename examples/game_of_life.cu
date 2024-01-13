@@ -25,6 +25,7 @@ inline void cudaAssert(cudaError_t code, const char *file, int line)
 namespace cuda_fun
 {
 
+// todo: lots of room for speedup here between tiling and reducing the number of branches
 __global__ void doGpuGol(const std::uint8_t* const current_grid, std::uint8_t* const next_grid, const int N)
 {
     const int tx = threadIdx.x;
@@ -96,6 +97,7 @@ public:
 
         std::swap(m_d_current_grid, m_d_next_grid);
 
+        // todo: figure out how to draw directly from GPU memory to avoid this copy
         cudaCheckError(cudaMemcpy(m_h_grid, m_d_current_grid, m_size, cudaMemcpyDeviceToHost));
     }
 };

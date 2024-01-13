@@ -1,5 +1,7 @@
 #include <cuda_fun/GridInterface.hpp>
 #include <cuda_fun/GridVisualizer.hpp>
+#include <cuda_fun/Vector.hpp>
+
 #include <GLFW/glfw3.h>
 
 #include <iostream>
@@ -24,12 +26,14 @@ GridVisualizer::GridVisualizer(const std::size_t rows, const std::size_t cols) :
 template<typename T>
 void GridVisualizer::run(std::unique_ptr<GridInterface<T>> grid)
 {
+    // todo: figure out how to do things the "modern" OpenGL way (this works for now though)
     while (!glfwWindowShouldClose(m_window))
     {       
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // todo: figure out how to draw directly from GPU memory
         const auto* const h_grid = grid->getHostPtr();
-        glDrawPixels(m_rows, m_cols, GL_GREEN, GL_UNSIGNED_BYTE, h_grid);
+        glDrawPixels(m_rows, m_cols, GL_RGB, GL_FLOAT, h_grid);
 
         /* Swap front and back buffers */
         glfwSwapBuffers(m_window);
@@ -48,5 +52,7 @@ GridVisualizer::~GridVisualizer()
 }
 
 template void GridVisualizer::run<std::uint8_t>(std::unique_ptr<GridInterface<std::uint8_t>>);
+template void GridVisualizer::run<float>(std::unique_ptr<GridInterface<float>>);
+template void GridVisualizer::run<Vec3f>(std::unique_ptr<GridInterface<Vec3f>>);
 
 }

@@ -15,16 +15,23 @@ set (CMAKE_CXX_FLAGS "-std=c++11 -D_MWAITXINTRIN_H_INCLUDED ${CMAKE_CXX_FLAGS}")
 
 include_directories(include)
 
-add_library(cuda_fun 
-    src/GridInterface.cpp
-    src/GridVisualizer.cpp
+cuda_add_library(cuda_fun 
+    src/GridInterface.cu
+    src/GridVisualizer.cu
     include/cuda_fun/GridInterface.hpp
     include/cuda_fun/GridVisualizer.hpp
+    include/cuda_fun/Sphere.hpp
+    include/cuda_fun/Vector.hpp
 )
 
+target_include_directories(cuda_fun PUBLIC include)
 target_include_directories(cuda_fun PUBLIC include)
 target_link_libraries(cuda_fun glfw GL)
 
 cuda_add_executable(game_of_life examples/game_of_life.cu)
 target_include_directories(game_of_life PUBLIC include)
 target_link_libraries(game_of_life cuda_fun)
+
+cuda_add_executable(tinyraytracer examples/tinyraytracer.cu)
+target_include_directories(tinyraytracer PUBLIC include)
+target_link_libraries(tinyraytracer cuda_fun)

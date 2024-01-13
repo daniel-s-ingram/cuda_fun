@@ -4,6 +4,7 @@
 #include <cuda_fun/Sphere.hpp>
 
 #include <cmath>
+#include <ctime>
 #include <iostream>
 #include <limits>
 #include <vector>
@@ -37,14 +38,21 @@ void populateGrid(Vec3f* const grid, const int N)
 
 struct Material
 {
-    __host__ __device__ Material(const Vec3f& color) : 
-        diffuse_color{color}
+    __host__ __device__ Material(const Vec3f& color, const Vec3f& a, const float s) : 
+        diffuse_color{color},
+        albedo{a},
+        specular_exponent{s}
     {}
 
-    __host__ __device__ Material() : diffuse_color{}
+    __host__ __device__ Material() : 
+        diffuse_color{},
+        albedo{},
+        specular_exponent{0.0}
     {}
 
     Vec3f diffuse_color;
+    Vec3f albedo;
+    float specular_exponent;
 };
 
 struct Light
@@ -61,13 +69,15 @@ struct Light
 struct Sphere
 {
     Vec3f center;
-    Material material;
+    Vec3f velocity;
     float radius;
+    Material material;
 
-    Sphere(const Vec3f& c, const Material& m, const float r) : 
+    Sphere(const Vec3f& c, const Vec3f& v, const float r, const Material& m) : 
         center{c},
-        material{m},
-        radius{r}
+        velocity{v},
+        radius{r},
+        material{m}
     {}
 
     __host__ __device__ bool ray_intersect(const Vec3f& orig, const Vec3f& dir, float& t0) const 
@@ -98,6 +108,11 @@ struct Sphere
     }
 };
 
+__host__ __device__ Vec3f reflect(const Vec3f& I, const Vec3f& N)
+{
+    return I - N*2.f*(I*N);
+}
+
 __host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const Sphere* const spheres, const int num_spheres, Vec3f& hit, Vec3f& N, Material& material) {
     float spheres_dist = std::numeric_limits<float>::max();
     for (int i = 0; i < num_spheres; ++i) {
@@ -113,6 +128,7 @@ __host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, co
     return spheres_dist<1000;
 }
 
+template<int depth = 0>
 __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sphere* const spheres, const int num_spheres, const Light* const lights, const int num_lights) 
 {
     Vec3f point, N;
@@ -124,13 +140,33 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
         return Vec3f(0.2, 0.7, 0.8);
     }
 
+    const Vec3f reflect_dir = reflect(dir, N).normalized();
+    const Vec3f reflect_orig = reflect_dir*N < 0 ? (point - N*1e-3) : (point + N*1e-3);
+    const Vec3f reflect_color = cast_ray<depth+1>(reflect_orig, reflect_dir, spheres, num_spheres, lights, num_lights);
+
     float diffuse_light_intensity{0.0};
+    float specular_light_intensity{0.0};
     for (std::size_t i = 0; i < num_lights; ++i) {
         const Vec3f light_dir = (lights[i].position - point).normalized();
+        const float light_distance = (lights[i].position - point).norm();
+
+        const Vec3f shadow_orig = light_dir*N < 0 ? (point - N*1e-3) : (point + N*1e-3);
+        Vec3f shadow_pt, shadow_N;
+        Material tmpmaterial;
+        if (scene_intersect(shadow_orig, light_dir, spheres, num_spheres, shadow_pt, shadow_N, tmpmaterial) && (shadow_pt - shadow_orig).norm() < light_distance)
+            continue;
+
         diffuse_light_intensity += lights[i].intensity * std::max(0.f, light_dir*N);
+        specular_light_intensity += std::pow(std::max(0.f, -reflect(-light_dir, N)*dir), material.specular_exponent)*lights[i].intensity;
     }
     
-    return material.diffuse_color * diffuse_light_intensity;
+    return material.diffuse_color * diffuse_light_intensity * material.albedo.x + (Vec3f{1.0, 1.0, 1.0} * specular_light_intensity * material.albedo.y) + (reflect_color * material.albedo.z);
+}
+
+template<>
+__host__ __device__ Vec3f cast_ray<4>(const Vec3f &orig, const Vec3f &dir, const Sphere* const spheres, const int num_spheres, const Light* const lights, const int num_lights) 
+{
+    return Vec3f(0.2, 0.7, 0.8);
 }
 
 __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, const int N, const int num_spheres, const Light* const lights, const int num_lights)
@@ -148,7 +184,7 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
     const float y = -(2*(j + 0.5)/(float)N - 1)*std::tan(fov/2.);
     const Vec3f dir = Vec3f{x, y, -1}.normalized();
 
-    const Vec3f origin{0, 0, 1};
+    const Vec3f origin{0, 0, 50};
     current_grid[i*N+j] = cast_ray(origin, dir, spheres, num_spheres, lights, num_spheres);
 }
 
@@ -160,7 +196,7 @@ __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
         return;
     }
 
-    spheres[i].center += Vec3f{0.01, 0.01, 0.0};
+    spheres[i].center += spheres[i].velocity;
 }
 
 class TinyRayTracer : public GridInterface<Vec3f>
@@ -180,14 +216,11 @@ public:
         
         cudaCheckError(cudaMemcpy(m_d_spheres, spheres.data(), m_spheres_size, cudaMemcpyHostToDevice));
         cudaCheckError(cudaMemcpy(m_d_lights, lights.data(), m_lights_size, cudaMemcpyHostToDevice));
-
-        std::cout << "spheres: " << m_d_spheres << " " << m_d_spheres + m_spheres_size << std::endl;
-        std::cout << "lights " << m_d_lights << " " << m_d_lights + m_lights_size << std::endl;
     }
 
     void update() override
     {
-        const dim3 block_dim{32, 32, 1};
+        const dim3 block_dim{16, 16, 1};
         const dim3 grid_dim{m_rows / block_dim.x, m_cols / block_dim.y, 1};
         render<<<grid_dim, block_dim>>>(m_d_current_grid, m_d_spheres, m_rows, m_num_spheres, m_d_lights, m_num_lights);
         cudaCheckError(cudaPeekAtLastError());
@@ -216,25 +249,49 @@ private:
     std::size_t m_lights_size;
 };
 
+float getRandomFloat()
+{
+    return std::rand()/static_cast<float>(RAND_MAX);
+}
+
+Vec3f getRandomVec()
+{
+    return Vec3f{getRandomFloat(), getRandomFloat(), getRandomFloat()}.normalized();
+}
+
 }
 
 int main()
 {
     using namespace cuda_fun;
 
+    std::srand(std::time(nullptr));
+
     constexpr std::size_t rows{1024};
     constexpr std::size_t cols{rows};
+    constexpr std::size_t num_spheres{25};
 
     Vec3f* const h_grid = new Vec3f[rows*cols];
     populateGrid(h_grid, rows);
 
     std::vector<Sphere> spheres;
-    spheres.emplace_back(Vec3f{-3, -3, -5}, Material{Vec3f{0.5, 0, 0}}, 1);
-    spheres.emplace_back(Vec3f{-2, -8, -20}, Material{Vec3f{0.2, 0.7, 0}}, 4);
-    spheres.emplace_back(Vec3f{-5, -5, -13}, Material{Vec3f{0.2, 0.2, 0.4}}, 2);
+    spheres.reserve(num_spheres);
+    for (int i = 0; i < num_spheres; ++i)
+    {
+        const Vec3f position = getRandomVec()*1.0 - 0.5F;
+        const Vec3f velocity = getRandomVec()*0.05 - 0.025F;
+        const Vec3f color = getRandomVec();
+        const Vec3f albedo = getRandomVec();
+        const float specular = 2000.0*getRandomFloat();
+        const float radius = 5.0*getRandomFloat();
+
+        spheres.emplace_back(position, velocity, radius, Material{color, albedo, specular});
+    }
 
     std::vector<Light> lights;
-    lights.emplace_back(Vec3f{0, 0, 2}, 1.5);
+    lights.emplace_back(Vec3f(-20, 20,  20), 1.5);
+    lights.emplace_back(Vec3f( 30, 50, -25), 1.8);
+    lights.emplace_back(Vec3f( 30, 20,  30), 1.7);
 
     GridVisualizer grid_visualizer{rows, cols};
     std::unique_ptr<GridInterface<Vec3f>> tiny_ray_tracer = std::make_unique<TinyRayTracer>(rows, cols, h_grid, spheres, lights);

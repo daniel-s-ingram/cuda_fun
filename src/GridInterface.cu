@@ -39,8 +39,6 @@ GridInterface<GridCellType>::GridInterface(const std::size_t rows, const std::si
         m_h_grid = h_grid;
         cudaCheckError(cudaMemcpy(m_d_current_grid, m_h_grid, m_size, cudaMemcpyHostToDevice));
     }
-
-    std::cout << "pixels " << m_d_current_grid << " " << m_d_current_grid + m_size << std::endl;
 }
 
 template<typename GridCellType>

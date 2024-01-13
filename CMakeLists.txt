@@ -12,7 +12,7 @@ find_package(OpenGL REQUIRED)
 #set(CMAKE_CXX_STANDARD_REQUIRED true)
 #set(CMAKE_CUDA_STANDARD_REQUIRED true)
 set(CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
-set(CUDA_NVCC_FLAGS "-G --expt-relaxed-constexpr ${CUDA_NVCC_FLAGS}")
+set(CUDA_NVCC_FLAGS "--expt-relaxed-constexpr ${CUDA_NVCC_FLAGS}")
 
 include_directories(include)
 

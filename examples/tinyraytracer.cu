@@ -30,18 +30,18 @@ void populateGrid(Vec3f* const grid, const int N)
     {
         for (int j = 0; j < N; ++j)
         {
-            grid[i*N + j] = Vec3f(j/float(N), i/float(N), 0);
+            grid[i*N + j] = Vec3f{j/float(N), i/float(N), 0};
         }
     }
 }
 
 struct Material
 {
-    Material(const Vec3f& color) : 
+    __host__ __device__ Material(const Vec3f& color) : 
         diffuse_color{color}
     {}
 
-    Material() : diffuse_color{}
+    __host__ __device__ Material() : diffuse_color{}
     {}
 
     Vec3f diffuse_color;
@@ -61,13 +61,13 @@ struct Light
 struct Sphere
 {
     Vec3f center;
-    float radius;
     Material material;
+    float radius;
 
-    Sphere(const Vec3f& c, const float r, const Material& m) : 
+    Sphere(const Vec3f& c, const Material& m, const float r) : 
         center{c},
-        radius{r},
-        material{m}
+        material{m},
+        radius{r}
     {}
 
     __host__ __device__ bool ray_intersect(const Vec3f& orig, const Vec3f& dir, float& t0) const 
@@ -100,7 +100,7 @@ struct Sphere
 
 __host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const Sphere* const spheres, const int num_spheres, Vec3f& hit, Vec3f& N, Material& material) {
     float spheres_dist = std::numeric_limits<float>::max();
-    for (std::size_t i = 0; i < num_spheres; i++) {
+    for (int i = 0; i < num_spheres; ++i) {
         float dist_i;
         if (spheres[i].ray_intersect(orig, dir, dist_i) && dist_i < spheres_dist) {
             spheres_dist = dist_i;
@@ -125,9 +125,9 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
     }
 
     float diffuse_light_intensity = 1.0;
-    for (std::size_t i = 0; i < num_lights; i++) {
-        const Vec3f light_dir = (lights[i].position - point).normalized();
-        //diffuse_light_intensity += lights[i].intensity * std::max(0.f, light_dir*N);
+    for (std::size_t i = 0; i < num_lights; ++i) {
+        // const Vec3f light_dir = (lights[i].position - point).normalized();
+        // diffuse_light_intensity += lights[i].intensity * std::max(0.f, light_dir*N);
     }
     
     return material.diffuse_color * diffuse_light_intensity;
@@ -146,9 +146,10 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
 
     const float x =  (2*(i + 0.5)/(float)N - 1)*std::tan(fov/2.)*N/(float)N;
     const float y = -(2*(j + 0.5)/(float)N - 1)*std::tan(fov/2.);
-    const Vec3f dir = Vec3f(x, y, -1).normalized();
+    const Vec3f dir = Vec3f{x, y, -1}.normalized();
 
-    current_grid[i*N+j] = cast_ray(Vec3f(0, 0, 1), dir, spheres, num_spheres, lights, num_spheres);
+    const Vec3f origin{0, 0, 1};
+    current_grid[i*N+j] = cast_ray(origin, dir, spheres, num_spheres, lights, num_spheres);
 }
 
 __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
@@ -167,16 +168,18 @@ class TinyRayTracer : public GridInterface<Vec3f>
 public:
     TinyRayTracer(const std::size_t rows, const std::size_t cols, Vec3f* const h_grid, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) : 
         GridInterface<Vec3f>(rows, cols, h_grid)
-    {
-        m_num_lights = lights.size();
-        m_lights_size = m_num_lights*sizeof(Light);
-        cudaCheckError(cudaMalloc((void**)&m_d_lights, m_lights_size));
-        cudaCheckError(cudaMemcpy(m_d_lights, lights.data(), m_lights_size, cudaMemcpyHostToDevice));
-    
+    {    
         m_num_spheres = spheres.size();
         m_spheres_size = m_num_spheres*sizeof(Sphere);
+
+        m_num_lights = lights.size();
+        m_lights_size = m_num_lights*sizeof(Light);
+
         cudaCheckError(cudaMalloc((void**)&m_d_spheres, m_spheres_size));
+        cudaCheckError(cudaMalloc((void**)&m_d_lights, m_lights_size));
+        
         cudaCheckError(cudaMemcpy(m_d_spheres, spheres.data(), m_spheres_size, cudaMemcpyHostToDevice));
+        cudaCheckError(cudaMemcpy(m_d_lights, lights.data(), m_lights_size, cudaMemcpyHostToDevice));
 
         std::cout << "spheres: " << m_d_spheres << " " << m_d_spheres + m_spheres_size << std::endl;
         std::cout << "lights " << m_d_lights << " " << m_d_lights + m_lights_size << std::endl;
@@ -186,7 +189,7 @@ public:
     {
         const dim3 block_dim{32, 32, 1};
         const dim3 grid_dim{m_rows / block_dim.x, m_cols / block_dim.y, 1};
-        render<<<grid_dim, block_dim>>>(m_d_current_grid, m_d_spheres, m_rows, m_spheres_size, m_d_lights, m_num_lights);
+        render<<<grid_dim, block_dim>>>(m_d_current_grid, m_d_spheres, m_rows, m_num_spheres, m_d_lights, m_num_lights);
         cudaCheckError(cudaPeekAtLastError());
 
         moveSpheres<<<1, m_num_spheres>>>(m_d_spheres, m_num_spheres);
@@ -194,6 +197,7 @@ public:
         //std::swap(m_d_current_grid, m_d_next_grid);
 
         // todo: figure out how to draw directly from GPU memory to avoid this copy
+        //std::cout << m_h_grid << std::endl;
         cudaCheckError(cudaMemcpy(m_h_grid, m_d_current_grid, m_size, cudaMemcpyDeviceToHost));
     }
 
@@ -214,32 +218,26 @@ private:
 
 }
 
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args)
-{
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-
 int main()
 {
     using namespace cuda_fun;
 
-    constexpr std::size_t rows{512};
+    constexpr std::size_t rows{1024};
     constexpr std::size_t cols{rows};
 
     Vec3f* const h_grid = new Vec3f[rows*cols];
     populateGrid(h_grid, rows);
 
     std::vector<Sphere> spheres;
-    spheres.emplace_back(Vec3f{-3, -3, -10}, 1, Material{Vec3f{0.5, 0, 0}});
-    spheres.emplace_back(Vec3f{-2, -8, -20}, 4, Vec3f{0.2, 0.7, 0});
-    spheres.emplace_back(Vec3f{-5, -5, -13}, 2, Vec3f{0.2, 0.2, 0.4});
+    spheres.emplace_back(Vec3f{-3, -3, -10}, Material{Vec3f{0.5, 0, 0}}, 1);
+    spheres.emplace_back(Vec3f{-2, -8, -20}, Material{Vec3f{0.2, 0.7, 0}}, 4);
+    spheres.emplace_back(Vec3f{-5, -5, -13}, Material{Vec3f{0.2, 0.2, 0.4}}, 2);
 
     std::vector<Light> lights;
-    lights.emplace_back(Vec3f(-20, 20, 20), 1.0);
+    //lights.emplace_back(Vec3f{-20, 20, 20}, 0.5);
 
     GridVisualizer grid_visualizer{rows, cols};
-    std::unique_ptr<GridInterface<Vec3f>> tiny_ray_tracer = make_unique<TinyRayTracer>(rows, cols, h_grid, spheres, lights);
+    std::unique_ptr<GridInterface<Vec3f>> tiny_ray_tracer = std::make_unique<TinyRayTracer>(rows, cols, h_grid, spheres, lights);
 
     grid_visualizer.run(std::move(tiny_ray_tracer));
 

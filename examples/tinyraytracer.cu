@@ -70,12 +70,14 @@ struct Sphere
 {
     Vec3f center;
     Vec3f velocity;
+    Vec3f acceleration;
     float radius;
     Material material;
 
-    Sphere(const Vec3f& c, const Vec3f& v, const float r, const Material& m) : 
+    Sphere(const Vec3f& c, const Vec3f& v, const Vec3f& a, const float r, const Material& m) : 
         center{c},
         velocity{v},
+        acceleration{a},
         radius{r},
         material{m}
     {}
@@ -196,7 +198,24 @@ __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
         return;
     }
 
-    spheres[i].center += spheres[i].velocity;
+    Vec3f acceleration{0.0, 0.0, 0.0};
+    for (int j = 0; j < num_spheres; ++j)
+    {
+        if (i == j)
+        {
+            continue;
+        }
+
+        const Vec3f dist_vec = (spheres[i].center - spheres[j].center);
+        const float r = std::max(dist_vec.norm(), 1.0F);
+        acceleration += dist_vec.normalized() * (1e-3*spheres[j].radius/(r*r));
+    }
+
+    acceleration = -acceleration;
+
+    __syncthreads();
+    spheres[i].velocity += acceleration;
+    spheres[i].center += spheres[i].velocity + spheres[i].acceleration*0.5F;
 }
 
 class TinyRayTracer : public GridInterface<Vec3f>
@@ -269,7 +288,7 @@ int main()
 
     constexpr std::size_t rows{1024};
     constexpr std::size_t cols{rows};
-    constexpr std::size_t num_spheres{25};
+    constexpr std::size_t num_spheres{50};
 
     Vec3f* const h_grid = new Vec3f[rows*cols];
     populateGrid(h_grid, rows);
@@ -278,20 +297,21 @@ int main()
     spheres.reserve(num_spheres);
     for (int i = 0; i < num_spheres; ++i)
     {
-        const Vec3f position = getRandomVec()*1.0 - 0.5F;
-        const Vec3f velocity = getRandomVec()*0.05 - 0.025F;
+        const Vec3f position = getRandomVec()*50.0 - 25.0F;
+        const Vec3f velocity = getRandomVec()*0.05F- 0.025F;
+        const Vec3f acceleration = getRandomVec()*0.05F - 0.025F;
         const Vec3f color = getRandomVec();
         const Vec3f albedo = getRandomVec();
-        const float specular = 2000.0*getRandomFloat();
+        const float specular = 200.0*getRandomFloat();
         const float radius = 5.0*getRandomFloat();
 
-        spheres.emplace_back(position, velocity, radius, Material{color, albedo, specular});
+        spheres.emplace_back(position, velocity, acceleration, radius, Material{color, albedo, specular});
     }
 
     std::vector<Light> lights;
-    lights.emplace_back(Vec3f(-20, 20,  20), 1.5);
-    lights.emplace_back(Vec3f( 30, 50, -25), 1.8);
-    lights.emplace_back(Vec3f( 30, 20,  30), 1.7);
+    lights.emplace_back(Vec3f(-20, 20,  20), 0.5);
+    lights.emplace_back(Vec3f( 30, 50, -25), 0.8);
+    lights.emplace_back(Vec3f( 30, 20,  30), 0.7);
 
     GridVisualizer grid_visualizer{rows, cols};
     std::unique_ptr<GridInterface<Vec3f>> tiny_ray_tracer = std::make_unique<TinyRayTracer>(rows, cols, h_grid, spheres, lights);

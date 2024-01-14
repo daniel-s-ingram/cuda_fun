@@ -59,6 +59,12 @@ struct Vec3f
         return *this;
     }
 
+    __host__ __device__ Vec3f& operator-=(const Vec3f& v)
+    {
+        *this += -v;
+        return *this;
+    }
+
     __host__ __device__ float norm() const { return std::sqrt(x*x + y*y + z*z); }
     __host__ __device__ Vec3f normalized() const { return (*this)*(1.f/norm()); }
 };

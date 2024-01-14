@@ -3,71 +3,156 @@
 
 #include <cuda.h>
 
+#include <cassert>
 #include <cmath>
 
 namespace cuda_fun
 {
 
-// todo: make these types generic
-struct Vec2f
+template<std::size_t Dimension, typename ElementType>
+struct Vector
 {
-    float x;
-    float y;
+    ElementType elements[Dimension];
 
-    __host__ __device__ Vec2f() : x{0.f}, y{0.f}
-    {}
-
-    __host__ __device__ Vec2f(float a, float b) : x{a}, y{b}
-    {}
-    
-    __host__ __device__ Vec2f operator*(const float s) const { return {s*x, s*y}; }
-    __host__ __device__ float operator*(const Vec2f& v) const { return x*v.x + y*v.y; }
-    __host__ __device__ Vec2f operator+(const Vec2f& v) const { return {x+v.x, y+v.y}; }
-    __host__ __device__ Vec2f operator-(const Vec2f& v) const { return {x-v.x, y-v.y}; }
-    __host__ __device__ Vec2f operator-() const { return {-x, -y}; }
-    __host__ __device__ Vec2f& operator+=(const Vec2f& v)
+    __host__ __device__ Vector()
     {
-        *this = *this + v;
-        return *this;
+        for (std::size_t idx = 0; idx < Dimension; ++idx)
+        {
+            elements[idx] = ElementType();
+        }
     }
 
-    __host__ __device__ float norm() const { return std::sqrt(x*x + y*y); }
-    __host__ __device__ Vec2f normalized() const { return (*this)*(1.f/norm()); }
+    template<typename... Elements>
+    __host__ __device__ Vector(Elements&&... args)
+    {
+        static_assert(sizeof...(Elements) == Dimension);
+        std::size_t idx{0};
+        for (const auto& arg : {args...})
+        {
+            elements[idx++] = arg;
+        }
+    }
+
+    __host__ __device__ ElementType& operator[](const std::size_t idx)
+    {
+        assert(idx < Dimension);
+        return elements[idx];
+    }
+
+    __host__ __device__ const ElementType& operator[](const std::size_t idx) const
+    {
+        assert(idx < Dimension);
+        return elements[idx];
+    }
+
+    __host__ __device__ ElementType norm() const 
+    {
+        ElementType sum_of_squares{};
+        for (std::size_t idx = 0; idx < Dimension; ++idx)
+        {
+            const auto& element = elements[idx];
+            sum_of_squares += element*element;
+        }
+
+        return std::sqrt(sum_of_squares);
+    }
+
+    __host__ __device__ Vector<Dimension, ElementType> normalized() const 
+    { 
+        return (*this) * (static_cast<ElementType>(1.0) / norm()); 
+    }
+
+    __host__ __device__ Vector<Dimension, ElementType>& operator+=(const Vector<Dimension, ElementType>& rhs);
+    __host__ __device__ Vector<Dimension, ElementType>& operator-=(const Vector<Dimension, ElementType>& rhs);
 };
 
-struct Vec3f
+template<std::size_t Dimension, typename ElementType>
+__host__ __device__ ElementType operator*(const Vector<Dimension, ElementType>& lhs, const Vector<Dimension, ElementType>& rhs)
 {
-    float x;
-    float y;
-    float z;
-
-    __host__ __device__ Vec3f() : x{0.f}, y{0.f}, z{0.f}
-    {}
-
-    __host__ __device__ Vec3f(float a, float b, float c) : x{a}, y{b}, z{c}
-    {}
-    
-    __host__ __device__ Vec3f operator*(const float s) const { return {s*x, s*y, s*z}; }
-    __host__ __device__ float operator*(const Vec3f& v) const { return x*v.x + y*v.y + z*v.z; }
-    __host__ __device__ Vec3f operator+(const Vec3f& v) const { return {x+v.x, y+v.y, z+v.z}; }
-    __host__ __device__ Vec3f operator-(const Vec3f& v) const { return {x-v.x, y-v.y, z-v.z}; }
-    __host__ __device__ Vec3f operator-(const float s) const { return {x-s, y-s, z-s}; }
-    __host__ __device__ Vec3f operator-() const { return {-x, -y, -z}; }
-    __host__ __device__ Vec3f& operator+=(const Vec3f& v)
+    ElementType val{};
+    for (std::size_t idx = 0; idx < Dimension; ++idx)
     {
-        *this = *this + v;
-        return *this;
+        val += lhs[idx]*rhs[idx];
     }
 
-    __host__ __device__ Vec3f& operator-=(const Vec3f& v)
+    return val;
+}
+
+template<std::size_t Dimension, typename ElementType, typename ScalarType>
+__host__ __device__ Vector<Dimension, ElementType> operator*(const Vector<Dimension, ElementType>& lhs, const ScalarType& rhs)
+{
+    Vector<Dimension, ElementType> vec;
+    for (std::size_t idx = 0; idx < Dimension; ++idx)
     {
-        *this += -v;
-        return *this;
+        vec[idx] = lhs[idx]*rhs;
     }
 
-    __host__ __device__ float norm() const { return std::sqrt(x*x + y*y + z*z); }
-    __host__ __device__ Vec3f normalized() const { return (*this)*(1.f/norm()); }
-};
+    return vec;
+}
+
+template<std::size_t Dimension, typename ElementType, typename ScalarType>
+__host__ __device__ Vector<Dimension, ElementType> operator-(const Vector<Dimension, ElementType>& lhs, const ScalarType& rhs)
+{
+    Vector<Dimension, ElementType> vec;
+    for (std::size_t idx = 0; idx < Dimension; ++idx)
+    {
+        vec[idx] = lhs[idx] - rhs;
+    }
+
+    return vec;
+}
+
+template<std::size_t Dimension, typename ElementType>
+__host__ __device__ Vector<Dimension, ElementType> operator+(const Vector<Dimension, ElementType>& lhs, const Vector<Dimension, ElementType>& rhs)
+{
+    Vector<Dimension, ElementType> vec;
+    for (std::size_t idx = 0; idx < Dimension; ++idx)
+    {
+        vec[idx] = lhs[idx] + rhs[idx];
+    }
+
+    return vec;
+}
+
+template<std::size_t Dimension, typename ElementType>
+__host__ __device__ Vector<Dimension, ElementType> operator-(const Vector<Dimension, ElementType>& orig)
+{
+    Vector<Dimension, ElementType> vec;
+    for (std::size_t idx = 0; idx < Dimension; ++idx)
+    {
+        vec[idx] = -orig[idx];
+    }
+
+    return vec;
+}
+
+template<std::size_t Dimension, typename ElementType>
+__host__ __device__ Vector<Dimension, ElementType> operator-(const Vector<Dimension, ElementType>& lhs, const Vector<Dimension, ElementType>& rhs)
+{
+    return lhs + (-rhs);
+}
+
+template<std::size_t Dimension, typename ElementType>
+__host__ __device__ Vector<Dimension, ElementType> operator*(const ElementType& lhs, const Vector<Dimension, ElementType>& rhs)
+{
+    return rhs*lhs;
+}
+
+template<std::size_t Dimension, typename ElementType>
+__host__ __device__ Vector<Dimension, ElementType>& Vector<Dimension, ElementType>::operator+=(const Vector<Dimension, ElementType>& rhs)
+{
+    *this = *this + rhs;
+    return *this;
+}
+
+template<std::size_t Dimension, typename ElementType>
+__host__ __device__ Vector<Dimension, ElementType>& Vector<Dimension, ElementType>::operator-=(const Vector<Dimension, ElementType>& rhs)
+{
+    *this += (-rhs);
+    return *this;
+}
+
+using Vec3f = Vector<3, float>;
 
 }
 

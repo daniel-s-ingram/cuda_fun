@@ -31,7 +31,7 @@ void populateGrid(Vec3f* const grid, const int N)
     {
         for (int j = 0; j < N; ++j)
         {
-            grid[i*N + j] = Vec3f{j/float(N), i/float(N), 0};
+            grid[i*N + j] = Vec3f{j/float(N), i/float(N), 0.0F};
         }
     }
 }
@@ -162,7 +162,7 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
         specular_light_intensity += std::pow(std::max(0.f, -reflect(-light_dir, N)*dir), material.specular_exponent)*lights[i].intensity;
     }
     
-    return material.diffuse_color * diffuse_light_intensity * material.albedo.x + (Vec3f{1.0, 1.0, 1.0} * specular_light_intensity * material.albedo.y) + (reflect_color * material.albedo.z);
+    return material.diffuse_color * diffuse_light_intensity * material.albedo[0] + (Vec3f{1.0, 1.0, 1.0} * specular_light_intensity * material.albedo[1]) + (reflect_color * material.albedo[2]);
 }
 
 template<>
@@ -184,7 +184,7 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
 
     const float x =  (2*(i + 0.5)/(float)N - 1)*std::tan(fov/2.)*N/(float)N;
     const float y = -(2*(j + 0.5)/(float)N - 1)*std::tan(fov/2.);
-    const Vec3f dir = Vec3f{x, y, -1}.normalized();
+    const Vec3f dir = Vec3f{x, y, -1.0F}.normalized();
 
     const Vec3f origin{0, 0, 50};
     current_grid[i*N+j] = cast_ray(origin, dir, spheres, num_spheres, lights, num_spheres);
@@ -208,7 +208,7 @@ __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
 
         const Vec3f dist_vec = (spheres[i].center - spheres[j].center);
         const float r = std::max(dist_vec.norm(), 1.0F);
-        acceleration += dist_vec.normalized() * (1e-3*spheres[j].radius/(r*r));
+        acceleration += dist_vec.normalized() * (1e-3F*spheres[j].radius/(r*r));
     }
 
     acceleration = -acceleration;
@@ -297,7 +297,7 @@ int main()
     spheres.reserve(num_spheres);
     for (int i = 0; i < num_spheres; ++i)
     {
-        const Vec3f position = getRandomVec()*50.0 - 25.0F;
+        const Vec3f position = getRandomVec()*50.0F - 25.0F;
         const Vec3f velocity = getRandomVec()*0.05F- 0.025F;
         const Vec3f acceleration = getRandomVec()*0.05F - 0.025F;
         const Vec3f color = getRandomVec();

@@ -2,6 +2,7 @@
 #include <cuda_fun/GridVisualizer.hpp>
 #include <cuda_fun/Vector.hpp>
 #include <cuda_fun/Sphere.hpp>
+#include <cuda_fun/Timer.hpp>
 
 #include <cmath>
 #include <ctime>
@@ -139,7 +140,7 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
     float sphere_dist = std::numeric_limits<float>::max();
     if (!scene_intersect(orig, dir, spheres, num_spheres, point, N, material))
     {
-        return Vec3f(0.2, 0.7, 0.8);
+        return Vec3f{0.8, 0.33, 0.0};
     }
 
     const Vec3f reflect_dir = reflect(dir, N).normalized();
@@ -168,11 +169,18 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
 template<>
 __host__ __device__ Vec3f cast_ray<4>(const Vec3f &orig, const Vec3f &dir, const Sphere* const spheres, const int num_spheres, const Light* const lights, const int num_lights) 
 {
-    return Vec3f(0.2, 0.7, 0.8);
+    return Vec3f{0.8, 0.33, 0.0};
 }
 
 __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, const int N, const int num_spheres, const Light* const lights, const int num_lights)
 {
+    extern __shared__ Sphere shared_spheres[];
+    for (std::size_t i = 0; i < num_spheres; ++i)
+    {
+        shared_spheres[i] = spheres[i];
+    }
+    __syncthreads();
+
     constexpr int fov = M_PI/2.;
 
     const int tx = threadIdx.x;
@@ -187,7 +195,7 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
     const Vec3f dir = Vec3f{x, y, -1.0F}.normalized();
 
     const Vec3f origin{0, 0, 50};
-    current_grid[i*N+j] = cast_ray(origin, dir, spheres, num_spheres, lights, num_spheres);
+    current_grid[i*N+j] = cast_ray(origin, dir, shared_spheres, num_spheres, lights, num_spheres);
 }
 
 __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
@@ -208,7 +216,7 @@ __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
 
         const Vec3f dist_vec = (spheres[i].center - spheres[j].center);
         const float r = std::max(dist_vec.norm(), 1.0F);
-        acceleration += dist_vec.normalized() * (1e-3F*spheres[j].radius/(r*r));
+        acceleration += dist_vec.normalized() * (1e-1F*spheres[j].radius/(r*r));
     }
 
     acceleration = -acceleration;
@@ -239,9 +247,10 @@ public:
 
     void update() override
     {
+        Timer timer{"tinyraytracer"};
         const dim3 block_dim{16, 16, 1};
         const dim3 grid_dim{m_rows / block_dim.x, m_cols / block_dim.y, 1};
-        render<<<grid_dim, block_dim>>>(m_d_current_grid, m_d_spheres, m_rows, m_num_spheres, m_d_lights, m_num_lights);
+        render<<<grid_dim, block_dim, m_num_spheres*sizeof(Sphere)>>>(m_d_current_grid, m_d_spheres, m_rows, m_num_spheres, m_d_lights, m_num_lights);
         cudaCheckError(cudaPeekAtLastError());
 
         moveSpheres<<<1, m_num_spheres>>>(m_d_spheres, m_num_spheres);
@@ -288,7 +297,7 @@ int main()
 
     constexpr std::size_t rows{1024};
     constexpr std::size_t cols{rows};
-    constexpr std::size_t num_spheres{50};
+    constexpr std::size_t num_spheres{100};
 
     Vec3f* const h_grid = new Vec3f[rows*cols];
     populateGrid(h_grid, rows);

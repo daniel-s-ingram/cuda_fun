@@ -22,6 +22,7 @@ cuda_add_library(cuda_fun
     include/cuda_fun/GridInterface.hpp
     include/cuda_fun/GridVisualizer.hpp
     include/cuda_fun/Sphere.hpp
+    include/cuda_fun/Timer.hpp
     include/cuda_fun/Vector.hpp
 )
 

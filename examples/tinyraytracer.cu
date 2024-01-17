@@ -25,18 +25,7 @@ inline void cudaAssert(cudaError_t code, const char *file, int line)
 
 namespace cuda_fun
 {
-
-void populateGrid(Vec3f* const grid, const int N)
-{
-    for (int i = 0; i < N; ++i)
-    {
-        for (int j = 0; j < N; ++j)
-        {
-            grid[i*N + j] = Vec3f{j/float(N), i/float(N), 0.0F};
-        }
-    }
-}
-
+    
 struct Material
 {
     __host__ __device__ Material(const Vec3f& color, const Vec3f& a, const float s) : 
@@ -299,8 +288,8 @@ int main()
     constexpr std::size_t cols{rows};
     constexpr std::size_t num_spheres{100};
 
-    Vec3f* const h_grid = new Vec3f[rows*cols];
-    populateGrid(h_grid, rows);
+    Vec3f* const h_grid{nullptr};
+    cudaCheckError(cudaHostAlloc((void**)&h_grid, rows*cols*sizeof(Vec3f), cudaHostAllocDefault));
 
     std::vector<Sphere> spheres;
     spheres.reserve(num_spheres);
@@ -318,9 +307,9 @@ int main()
     }
 
     std::vector<Light> lights;
-    lights.emplace_back(Vec3f(-20, 20,  20), 0.5);
-    lights.emplace_back(Vec3f( 30, 50, -25), 0.8);
-    lights.emplace_back(Vec3f( 30, 20,  30), 0.7);
+    lights.emplace_back(Vec3f{-20, 20,  20}, 0.5);
+    lights.emplace_back(Vec3f{ 30, 50, -25}, 0.8);
+    lights.emplace_back(Vec3f{ 30, 20,  30}, 0.7);
 
     GridVisualizer grid_visualizer{rows, cols};
     std::unique_ptr<GridInterface<Vec3f>> tiny_ray_tracer = std::make_unique<TinyRayTracer>(rows, cols, h_grid, spheres, lights);

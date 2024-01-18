@@ -25,7 +25,7 @@ inline void cudaAssert(cudaError_t code, const char *file, int line)
 
 namespace cuda_fun
 {
-    
+
 struct Material
 {
     __host__ __device__ Material(const Vec3f& color, const Vec3f& a, const float s) : 
@@ -170,7 +170,7 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
     }
     __syncthreads();
 
-    constexpr int fov = M_PI/2.;
+    constexpr float fov = M_PI/2.;
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;

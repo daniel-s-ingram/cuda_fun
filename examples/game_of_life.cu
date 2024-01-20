@@ -24,10 +24,10 @@ __global__ void doGpuGol(const std::uint8_t* const current_grid, std::uint8_t* c
     const int i = by*blockDim.y + ty;
     const int j = bx*blockDim.x + tx;
 
-    const std::size_t up    = (i > 0) ? (i - 1) : (N - 1);
-    const std::size_t down  = (i < (N - 1)) ? (i + 1) : 0;
-    const std::size_t left  = (j > 0) ? (j - 1) : (N - 1);
-    const std::size_t right = (j < (N - 1)) ? (j + 1) : 0;
+    const std::uint32_t up    = (i > 0) ? (i - 1) : (N - 1);
+    const std::uint32_t down  = (i < (N - 1)) ? (i + 1) : 0;
+    const std::uint32_t left  = (j > 0) ? (j - 1) : (N - 1);
+    const std::uint32_t right = (j < (N - 1)) ? (j + 1) : 0;
 
     int num_live_neighbors{0};
     num_live_neighbors += (!current_grid[up*N + left]) ? 0 : 1;
@@ -69,7 +69,7 @@ __global__ void doGpuGol(const std::uint8_t* const current_grid, std::uint8_t* c
 class GameOfLife : public GridInterface<std::uint8_t>
 {
 public:
-    GameOfLife(const std::size_t rows, const std::size_t cols, std::uint8_t* const h_grid = nullptr) : 
+    GameOfLife(const std::uint32_t rows, const std::uint32_t cols, std::uint8_t* const h_grid = nullptr) : 
         GridInterface<std::uint8_t>(rows, cols, h_grid)
     {}
 
@@ -107,16 +107,16 @@ void populateGrid(std::uint8_t* const grid, const int N)
 
 int main()
 {
-    constexpr std::size_t rows{1024};
-    constexpr std::size_t cols{rows};
+    using namespace cuda_fun;
+    constexpr std::uint32_t rows{1024};
+    constexpr std::uint32_t cols{rows};
 
     std::uint8_t* const h_grid = new std::uint8_t[rows*cols];
     populateGrid(h_grid, rows);
 
-    using namespace cuda_fun;
-    GridVisualizer grid_visualizer{rows, cols};
     std::unique_ptr<GridInterface<std::uint8_t>> game_of_life = std::make_unique<GameOfLife>(rows, cols, h_grid);
 
+    GridVisualizer grid_visualizer{rows, cols};
     grid_visualizer.run(std::move(game_of_life));
 
     return 0;

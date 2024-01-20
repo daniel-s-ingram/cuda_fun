@@ -10,7 +10,7 @@ template<typename GridCellType>
 class GridInterface
 {
 public:
-    GridInterface(const std::size_t rows, const std::size_t cols, GridCellType* const h_grid = nullptr);
+    GridInterface(const std::uint32_t rows, const std::uint32_t cols, GridCellType* const h_grid = nullptr);
 
     virtual void update() = 0;
 
@@ -19,9 +19,9 @@ public:
     GridCellType* getHostPtr() { return m_h_grid; }
 
 protected:
-    std::size_t m_rows{0U};
-    std::size_t m_cols{0U};
-    std::size_t m_size{0U};
+    std::uint32_t m_rows{0U};
+    std::uint32_t m_cols{0U};
+    std::uint64_t m_size{0U};
 
     GridCellType* m_h_grid{nullptr};
     GridCellType* m_d_current_grid{nullptr};

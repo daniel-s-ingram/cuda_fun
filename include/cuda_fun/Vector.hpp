@@ -14,7 +14,7 @@ struct Vector
 {
     ElementType elements[Dimension];
 
-    __host__ __device__ Vector() = default;
+    Vector() = default;
 
     template<typename... Elements>
     __host__ __device__ Vector(Elements&&... args)

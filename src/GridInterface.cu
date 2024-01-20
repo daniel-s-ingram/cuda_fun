@@ -23,7 +23,7 @@ namespace cuda_fun
 {
 
 template<typename GridCellType>
-GridInterface<GridCellType>::GridInterface(const std::size_t rows, const std::size_t cols, GridCellType* const h_grid) :
+GridInterface<GridCellType>::GridInterface(const std::uint32_t rows, const std::uint32_t cols, GridCellType* const h_grid) :
     m_rows{rows},
     m_cols{cols},
     m_size{m_rows*m_cols*sizeof(GridCellType)},

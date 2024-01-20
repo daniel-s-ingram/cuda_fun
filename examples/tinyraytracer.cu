@@ -126,7 +126,7 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
 
     float diffuse_light_intensity{0.0F};
     float specular_light_intensity{0.0F};
-    for (std::size_t i = 0; i < num_lights; ++i) {
+    for (std::uint32_t i = 0; i < num_lights; ++i) {
         const Vec3f light_dir = (lights[i].position - point).normalized();
         const float light_distance = (lights[i].position - point).norm();
 
@@ -152,7 +152,7 @@ __host__ __device__ Vec3f cast_ray<4>(const Vec3f &orig, const Vec3f &dir, const
 __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, const int N, const int num_spheres, const Light* const lights, const int num_lights)
 {
     extern __shared__ Sphere shared_spheres[];
-    for (std::size_t i = 0; i < num_spheres; ++i)
+    for (std::uint32_t i = 0; i < num_spheres; ++i)
     {
         shared_spheres[i] = spheres[i];
     }
@@ -206,7 +206,7 @@ __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
 class TinyRayTracer : public GridInterface<Vec3f>
 {
 public:
-    TinyRayTracer(const std::size_t rows, const std::size_t cols, Vec3f* const h_grid, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) : 
+    TinyRayTracer(const std::uint32_t rows, const std::uint32_t cols, Vec3f* const h_grid, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) : 
         GridInterface<Vec3f>(rows, cols, h_grid)
     {    
         m_num_spheres = spheres.size();
@@ -248,10 +248,10 @@ public:
 private:
     Sphere* m_d_spheres;
     Light* m_d_lights;
-    std::size_t m_num_spheres;
-    std::size_t m_spheres_size;
-    std::size_t m_num_lights;
-    std::size_t m_lights_size;
+    std::uint32_t m_num_spheres;
+    std::uint32_t m_spheres_size;
+    std::uint32_t m_num_lights;
+    std::uint32_t m_lights_size;
 };
 
 float getRandomFloat()
@@ -272,9 +272,9 @@ int main()
 
     std::srand(std::time(nullptr));
 
-    constexpr std::size_t rows{1024};
-    constexpr std::size_t cols{rows};
-    constexpr std::size_t num_spheres{50};
+    constexpr std::uint32_t rows{1024};
+    constexpr std::uint32_t cols{rows};
+    constexpr std::uint32_t num_spheres{50};
 
     Vec3f* const h_grid{nullptr};
     cudaCheckError(cudaHostAlloc((void**)&h_grid, rows*cols*sizeof(Vec3f), cudaHostAllocDefault));
@@ -299,9 +299,9 @@ int main()
     lights.emplace_back(Vec3f{ 30, 50, -25}, 0.8);
     lights.emplace_back(Vec3f{ 30, 20,  30}, 0.7);
 
-    GridVisualizer grid_visualizer{rows, cols};
     std::unique_ptr<GridInterface<Vec3f>> tiny_ray_tracer = std::make_unique<TinyRayTracer>(rows, cols, h_grid, spheres, lights);
 
+    GridVisualizer grid_visualizer{rows, cols};
     grid_visualizer.run(std::move(tiny_ray_tracer));
 
     return 0;

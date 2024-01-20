@@ -9,7 +9,7 @@
 namespace cuda_fun
 {
 
-GridVisualizer::GridVisualizer(const std::size_t rows, const std::size_t cols) :
+GridVisualizer::GridVisualizer(const std::uint32_t rows, const std::uint32_t cols) :
     m_window{nullptr},
     m_rows{rows},
     m_cols{cols}

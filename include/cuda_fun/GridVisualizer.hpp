@@ -15,7 +15,7 @@ class GridInterface;
 class GridVisualizer
 {
 public:
-    GridVisualizer(const std::size_t rows, const std::size_t cols);
+    GridVisualizer(const std::uint32_t rows, const std::uint32_t cols);
 
     template<typename T>
     void run(std::unique_ptr<GridInterface<T>> grid);
@@ -24,8 +24,8 @@ public:
 
 private:
     GLFWwindow* m_window{nullptr}; //hmmm
-    std::size_t m_rows{0U};
-    std::size_t m_cols{0U};
+    std::uint32_t m_rows{0U};
+    std::uint32_t m_cols{0U};
 };
 
 }

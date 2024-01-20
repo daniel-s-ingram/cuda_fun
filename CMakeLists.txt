@@ -14,19 +14,10 @@ find_package(OpenGL REQUIRED)
 set(CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
 set(CUDA_NVCC_FLAGS "--expt-relaxed-constexpr ${CUDA_NVCC_FLAGS}")
 
-include_directories(include)
-
 cuda_add_library(cuda_fun 
     src/GridInterface.cu
     src/GridVisualizer.cu
-    include/cuda_fun/GridInterface.hpp
-    include/cuda_fun/GridVisualizer.hpp
-    include/cuda_fun/Sphere.hpp
-    include/cuda_fun/Timer.hpp
-    include/cuda_fun/Vector.hpp
 )
-
-target_include_directories(cuda_fun PUBLIC include)
 target_include_directories(cuda_fun PUBLIC include)
 target_link_libraries(cuda_fun glfw GL)
 
@@ -37,3 +28,7 @@ target_link_libraries(game_of_life cuda_fun)
 cuda_add_executable(tinyraytracer examples/tinyraytracer.cu)
 target_include_directories(tinyraytracer PUBLIC include)
 target_link_libraries(tinyraytracer cuda_fun)
+
+cuda_add_executable(fractals examples/fractals.cu)
+target_include_directories(fractals PUBLIC include)
+target_link_libraries(fractals cuda_fun)

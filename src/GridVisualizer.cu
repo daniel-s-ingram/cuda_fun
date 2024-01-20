@@ -33,7 +33,8 @@ void GridVisualizer::run(std::unique_ptr<GridInterface<T>> grid)
 
         // todo: figure out how to draw directly from GPU memory
         const auto* const h_grid = grid->getHostPtr();
-        glDrawPixels(m_rows, m_cols, GL_RGB, GL_FLOAT, h_grid);
+        const auto format = sizeof(T) == 12 ? GL_RGB : GL_GREEN;
+        glDrawPixels(m_rows, m_cols, format, GL_FLOAT, h_grid);
 
         /* Swap front and back buffers */
         glfwSwapBuffers(m_window);

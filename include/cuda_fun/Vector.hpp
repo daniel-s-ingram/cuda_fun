@@ -54,7 +54,7 @@ struct Vector
             sum_of_squares += element*element;
         }
 
-        return std::sqrt(sum_of_squares);
+        return sqrtf(sum_of_squares);
     }
 
     __host__ __device__ Vector<Dimension, ElementType> normalized() const 
@@ -97,6 +97,18 @@ __host__ __device__ Vector<Dimension, ElementType> operator-(const Vector<Dimens
     for (std::size_t idx = 0; idx < Dimension; ++idx)
     {
         vec[idx] = lhs[idx] - rhs;
+    }
+
+    return vec;
+}
+
+template<std::size_t Dimension, typename ElementType, typename ScalarType>
+__host__ __device__ Vector<Dimension, ElementType> operator/(const Vector<Dimension, ElementType>& lhs, const ScalarType& rhs)
+{
+    Vector<Dimension, ElementType> vec;
+    for (std::size_t idx = 0; idx < Dimension; ++idx)
+    {
+        vec[idx] = lhs[idx]/rhs;
     }
 
     return vec;

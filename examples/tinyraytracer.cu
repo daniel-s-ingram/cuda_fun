@@ -1,3 +1,4 @@
+#include <cuda_fun/cuda_utils.hpp>
 #include <cuda_fun/GridInterface.hpp>
 #include <cuda_fun/GridVisualizer.hpp>
 #include <cuda_fun/Vector.hpp>
@@ -9,19 +10,6 @@
 #include <iostream>
 #include <limits>
 #include <vector>
-
-#define cudaCheckError(code) { cudaAssert((code), __FILE__, __LINE__); }
-inline void cudaAssert(cudaError_t code, const char *file, int line)
-{
-    if (code == cudaSuccess) 
-    {
-        return;
-    }
-
-    cudaDeviceReset();
-    printf("%s in file %s on line %d\n\n", cudaGetErrorString(code), file, line);
-    exit(1);
-}
 
 namespace cuda_fun
 {
@@ -82,7 +70,7 @@ struct Sphere
             return false;
         }
 
-        const float thc = std::sqrt(radius*radius - d2);
+        const float thc = sqrtf(radius*radius - d2);
         const float t1 = tca + thc;
 
         t0 = tca - thc;
@@ -102,7 +90,7 @@ struct Sphere
 
 __host__ __device__ Vec3f reflect(const Vec3f& I, const Vec3f& N)
 {
-    return I - N*2.f*(I*N);
+    return I - N*2.0F*(I*N);
 }
 
 __host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const Sphere* const spheres, const int num_spheres, Vec3f& hit, Vec3f& N, Material& material) {
@@ -129,20 +117,20 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
     float sphere_dist = std::numeric_limits<float>::max();
     if (!scene_intersect(orig, dir, spheres, num_spheres, point, N, material))
     {
-        return Vec3f{0.8, 0.33, 0.0};
+        return Vec3f{0.8F, 0.33F, 0.0F};
     }
 
     const Vec3f reflect_dir = reflect(dir, N).normalized();
     const Vec3f reflect_orig = reflect_dir*N < 0 ? (point - N*1e-3) : (point + N*1e-3);
     const Vec3f reflect_color = cast_ray<depth+1>(reflect_orig, reflect_dir, spheres, num_spheres, lights, num_lights);
 
-    float diffuse_light_intensity{0.0};
-    float specular_light_intensity{0.0};
+    float diffuse_light_intensity{0.0F};
+    float specular_light_intensity{0.0F};
     for (std::size_t i = 0; i < num_lights; ++i) {
         const Vec3f light_dir = (lights[i].position - point).normalized();
         const float light_distance = (lights[i].position - point).norm();
 
-        const Vec3f shadow_orig = light_dir*N < 0 ? (point - N*1e-3) : (point + N*1e-3);
+        const Vec3f shadow_orig = light_dir*N < 0.0F ? (point - N*1e-3F) : (point + N*1e-3F);
         Vec3f shadow_pt, shadow_N;
         Material tmpmaterial;
         if (scene_intersect(shadow_orig, light_dir, spheres, num_spheres, shadow_pt, shadow_N, tmpmaterial) && (shadow_pt - shadow_orig).norm() < light_distance)
@@ -152,7 +140,7 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
         specular_light_intensity += std::pow(std::max(0.f, -reflect(-light_dir, N)*dir), material.specular_exponent)*lights[i].intensity;
     }
     
-    return material.diffuse_color * diffuse_light_intensity * material.albedo[0] + (Vec3f{1.0, 1.0, 1.0} * specular_light_intensity * material.albedo[1]) + (reflect_color * material.albedo[2]);
+    return material.diffuse_color * diffuse_light_intensity * material.albedo[0] + (Vec3f{1.0F, 1.0F, 1.0F} * specular_light_intensity * material.albedo[1]) + (reflect_color * material.albedo[2]);
 }
 
 template<>
@@ -170,7 +158,7 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
     }
     __syncthreads();
 
-    constexpr float fov = M_PI/2.;
+    constexpr float fov = 1.0F;
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
@@ -179,11 +167,11 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
     const int i = by*blockDim.y + ty;
     const int j = bx*blockDim.x + tx;
 
-    const float x =  (2*(i + 0.5)/(float)N - 1)*std::tan(fov/2.)*N/(float)N;
-    const float y = -(2*(j + 0.5)/(float)N - 1)*std::tan(fov/2.);
+    const float x =  (2.0F*(i + 0.5F)/static_cast<float>(N) - 1.0F)*tanf(fov/2.0F)*N/static_cast<float>(N);
+    const float y = -(2.0F*(j + 0.5F)/static_cast<float>(N) - 1.0F)*tanf(fov/2.0F);
     const Vec3f dir = Vec3f{x, y, -1.0F}.normalized();
 
-    const Vec3f origin{0, 0, 50};
+    const Vec3f origin{0.0F, 0.0F, 50.0F};
     current_grid[i*N+j] = cast_ray(origin, dir, shared_spheres, num_spheres, lights, num_spheres);
 }
 
@@ -195,7 +183,7 @@ __global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
         return;
     }
 
-    Vec3f acceleration{0.0, 0.0, 0.0};
+    Vec3f acceleration{0.0F, 0.0F, 0.0F};
     for (int j = 0; j < num_spheres; ++j)
     {
         if (i == j)
@@ -286,7 +274,7 @@ int main()
 
     constexpr std::size_t rows{1024};
     constexpr std::size_t cols{rows};
-    constexpr std::size_t num_spheres{100};
+    constexpr std::size_t num_spheres{50};
 
     Vec3f* const h_grid{nullptr};
     cudaCheckError(cudaHostAlloc((void**)&h_grid, rows*cols*sizeof(Vec3f), cudaHostAllocDefault));

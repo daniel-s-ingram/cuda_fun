@@ -1,3 +1,4 @@
+#include <cuda_fun/cuda_utils.hpp>
 #include <cuda_fun/GridInterface.hpp>
 #include <cuda_fun/GridVisualizer.hpp>
 
@@ -9,18 +10,6 @@
 #include <iostream>
 #include <memory>
 #include <random>
-
-#define cudaCheckError(code) { cudaAssert((code), __FILE__, __LINE__); }
-inline void cudaAssert(cudaError_t code, const char *file, int line)
-{
-    if (code == cudaSuccess) 
-    {
-        return;
-    }
-
-    printf("%s in file %s on line %d\n\n", cudaGetErrorString(code), file, line);
-    exit(1);
-}
 
 namespace cuda_fun
 {
@@ -104,12 +93,6 @@ public:
 
 }
 
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args)
-{
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-
 void populateGrid(std::uint8_t* const grid, const int N)
 {
     std::srand(std::time(nullptr));
@@ -124,7 +107,7 @@ void populateGrid(std::uint8_t* const grid, const int N)
 
 int main()
 {
-    constexpr std::size_t rows{8196};
+    constexpr std::size_t rows{1024};
     constexpr std::size_t cols{rows};
 
     std::uint8_t* const h_grid = new std::uint8_t[rows*cols];
@@ -132,7 +115,7 @@ int main()
 
     using namespace cuda_fun;
     GridVisualizer grid_visualizer{rows, cols};
-    std::unique_ptr<GridInterface<std::uint8_t>> game_of_life = make_unique<GameOfLife>(rows, cols, h_grid);
+    std::unique_ptr<GridInterface<std::uint8_t>> game_of_life = std::make_unique<GameOfLife>(rows, cols, h_grid);
 
     grid_visualizer.run(std::move(game_of_life));
 

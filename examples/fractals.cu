@@ -12,6 +12,9 @@
 namespace cuda_fun
 {
 
+constexpr std::size_t MAX_ITERATIONS{16U};
+__constant__ Vec3f color_map[16];
+
 __global__ void mandelbrot(Vec3f* const d_grid, const std::size_t N, const float power)
 {
     const std::size_t i = blockIdx.y*blockDim.y + threadIdx.y;
@@ -23,31 +26,10 @@ __global__ void mandelbrot(Vec3f* const d_grid, const std::size_t N, const float
     const Complex c{x, y};
     std::size_t k{0U};
     Complex z{0.0F, 0.0F};
-    while ((z.getReal() < 4.0) && (k++ < 16))
+    while ((z.getReal() < 4.0) && (k++ < MAX_ITERATIONS))
     {
         z = powf(z, power) + c;
     }
-    
-Vec3f color_map[16] = {
-    Vec3f{66, 30, 15}/255.0F,
-    Vec3f{25, 7, 26}/255.0F,
-    Vec3f{9, 1, 47}/255.0F,
-    Vec3f{4, 4, 73}/255.0F,
-    Vec3f{0, 7, 100}/255.0F,
-    Vec3f{12, 44, 138}/255.0F,
-    Vec3f{24, 82, 177}/255.0F,
-    Vec3f{57, 125, 209}/255.0F,
-    Vec3f{134, 181, 229}/255.0F,
-    Vec3f{211, 236, 248}/255.0F,
-    Vec3f{241, 233, 191}/255.0F,
-    Vec3f{248, 201, 95}/255.0F,
-    Vec3f{255, 170, 0}/255.0F,
-    Vec3f{204, 128, 0}/255.0F,
-    Vec3f{153, 87, 0}/255.0F,
-    Vec3f{106, 52, 3}/255.0F
-};
-
-
 
     d_grid[i*N + j] = color_map[k];
 }
@@ -87,6 +69,27 @@ int main()
     
     constexpr std::size_t rows{1024};
     constexpr std::size_t cols{rows};
+
+    const Vec3f colors[MAX_ITERATIONS] = {
+        Vec3f{66, 30, 15}/255.0F,
+        Vec3f{25, 7, 26}/255.0F,
+        Vec3f{9, 1, 47}/255.0F,
+        Vec3f{4, 4, 73}/255.0F,
+        Vec3f{0, 7, 100}/255.0F,
+        Vec3f{12, 44, 138}/255.0F,
+        Vec3f{24, 82, 177}/255.0F,
+        Vec3f{57, 125, 209}/255.0F,
+        Vec3f{134, 181, 229}/255.0F,
+        Vec3f{211, 236, 248}/255.0F,
+        Vec3f{241, 233, 191}/255.0F,
+        Vec3f{248, 201, 95}/255.0F,
+        Vec3f{255, 170, 0}/255.0F,
+        Vec3f{204, 128, 0}/255.0F,
+        Vec3f{153, 87, 0}/255.0F,
+        Vec3f{106, 52, 3}/255.0F
+    };
+
+    cudaMemcpyToSymbol(color_map, colors, MAX_ITERATIONS*sizeof(Vec3f));
 
     Vec3f* const h_grid = new Vec3f[rows*cols];
 

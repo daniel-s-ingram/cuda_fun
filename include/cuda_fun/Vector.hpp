@@ -14,13 +14,7 @@ struct Vector
 {
     ElementType elements[Dimension];
 
-    __host__ __device__ Vector()
-    {
-        for (std::size_t idx = 0; idx < Dimension; ++idx)
-        {
-            elements[idx] = ElementType();
-        }
-    }
+    __host__ __device__ Vector() = default;
 
     template<typename... Elements>
     __host__ __device__ Vector(Elements&&... args)

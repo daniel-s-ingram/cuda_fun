@@ -14,6 +14,8 @@
 namespace cuda_fun
 {
 
+constexpr std::uint32_t NUM_SPHERES{100U};
+
 struct Material
 {
     __host__ __device__ Material(const Vec3f& color, const Vec3f& a, const float s) : 
@@ -44,33 +46,44 @@ struct Light
     float intensity;
 };
 
-struct Sphere
+struct Spheres
 {
-    Vec3f center;
-    Vec3f velocity;
-    Vec3f acceleration;
-    float radius;
-    Material material;
+    Vec3f center[NUM_SPHERES];
+    Vec3f velocity[NUM_SPHERES];
+    Vec3f acceleration[NUM_SPHERES];
+    float radius[NUM_SPHERES];
+    Material material[NUM_SPHERES];
 
-    Sphere(const Vec3f& c, const Vec3f& v, const Vec3f& a, const float r, const Material& m) : 
-        center{c},
-        velocity{v},
-        acceleration{a},
-        radius{r},
-        material{m}
-    {}
-
-    __host__ __device__ bool ray_intersect(const Vec3f& orig, const Vec3f& dir, float& t0) const 
+    __host__ __device__ void set(const std::uint32_t i, const Vec3f& c, const Vec3f& v, const Vec3f& a, const float r, const Material& m)
     {
-        const Vec3f L = center - orig;
+        center[i] = c;
+        velocity[i] = v;
+        acceleration[i] = a;
+        radius[i] = r;
+        material[i] = m;
+    }
+
+    __host__ __device__ void set(const std::uint32_t i, const Spheres& spheres)
+    {
+        center[i] = spheres.center[i];
+        velocity[i] = spheres.velocity[i];
+        acceleration[i] = spheres.acceleration[i];
+        radius[i] = spheres.radius[i];
+        material[i] = spheres.material[i];
+    }
+
+    __host__ __device__ bool ray_intersect(const std::uint32_t i, const Vec3f& orig, const Vec3f& dir, float& t0) const 
+    {
+        const Vec3f L = center[i] - orig;
         const float tca = L*dir;
         const float d2 = L*L - tca*tca;
-        if (d2 > radius*radius)
+        const float r = radius[i];
+        if (d2 > r*r)
         {
             return false;
         }
 
-        const float thc = sqrtf(radius*radius - d2);
+        const float thc = sqrtf(r*r - d2);
         const float t1 = tca + thc;
 
         t0 = tca - thc;
@@ -93,36 +106,36 @@ __host__ __device__ Vec3f reflect(const Vec3f& I, const Vec3f& N)
     return I - N*2.0F*(I*N);
 }
 
-__host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const Sphere* const spheres, const int num_spheres, Vec3f& hit, Vec3f& N, Material& material) {
+__host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const Spheres* const spheres, Vec3f& hit, Vec3f& N, Material& material) {
     float spheres_dist = std::numeric_limits<float>::max();
-    for (int i = 0; i < num_spheres; ++i) {
+    for (int i = 0; i < NUM_SPHERES; ++i) {
         float dist_i;
-        if (spheres[i].ray_intersect(orig, dir, dist_i) && dist_i < spheres_dist) {
+        if (spheres->ray_intersect(i, orig, dir, dist_i) && dist_i < spheres_dist) {
             spheres_dist = dist_i;
             hit = orig + dir*dist_i;
-            N = (hit - spheres[i].center).normalized();
-            material = spheres[i].material;
+            N = (hit - spheres->center[i]).normalized();
+            material = spheres->material[i];
         }
     }
     
     return spheres_dist<1000;
 }
 
-template<int depth = 0>
-__host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sphere* const spheres, const int num_spheres, const Light* const lights, const int num_lights) 
+template<std::uint32_t depth = 0>
+__host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Spheres* const spheres, const Light* const lights, const int num_lights) 
 {
     Vec3f point, N;
     Material material;
 
     float sphere_dist = std::numeric_limits<float>::max();
-    if (!scene_intersect(orig, dir, spheres, num_spheres, point, N, material))
+    if (!scene_intersect(orig, dir, spheres, point, N, material))
     {
         return Vec3f{0.8F, 0.33F, 0.0F};
     }
 
     const Vec3f reflect_dir = reflect(dir, N).normalized();
     const Vec3f reflect_orig = reflect_dir*N < 0 ? (point - N*1e-3) : (point + N*1e-3);
-    const Vec3f reflect_color = cast_ray<depth+1>(reflect_orig, reflect_dir, spheres, num_spheres, lights, num_lights);
+    const Vec3f reflect_color = cast_ray<depth+1>(reflect_orig, reflect_dir, spheres, lights, num_lights);
 
     float diffuse_light_intensity{0.0F};
     float specular_light_intensity{0.0F};
@@ -133,7 +146,7 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
         const Vec3f shadow_orig = light_dir*N < 0.0F ? (point - N*1e-3F) : (point + N*1e-3F);
         Vec3f shadow_pt, shadow_N;
         Material tmpmaterial;
-        if (scene_intersect(shadow_orig, light_dir, spheres, num_spheres, shadow_pt, shadow_N, tmpmaterial) && (shadow_pt - shadow_orig).norm() < light_distance)
+        if (scene_intersect(shadow_orig, light_dir, spheres, shadow_pt, shadow_N, tmpmaterial) && (shadow_pt - shadow_orig).norm() < light_distance)
             continue;
 
         diffuse_light_intensity += lights[i].intensity * std::max(0.f, light_dir*N);
@@ -144,17 +157,17 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
 }
 
 template<>
-__host__ __device__ Vec3f cast_ray<4>(const Vec3f &orig, const Vec3f &dir, const Sphere* const spheres, const int num_spheres, const Light* const lights, const int num_lights) 
+__host__ __device__ Vec3f cast_ray<4>(const Vec3f &orig, const Vec3f &dir, const Spheres* const spheres, const Light* const lights, const int num_lights) 
 {
     return Vec3f{0.8, 0.33, 0.0};
 }
 
-__global__ void render(Vec3f* const current_grid, const Sphere* const spheres, const int N, const int num_spheres, const Light* const lights, const int num_lights)
+__global__ void render(Vec3f* const current_grid, const Spheres* const spheres, const int N, const Light* const lights, const int num_lights)
 {
-    extern __shared__ Sphere shared_spheres[];
-    for (std::uint32_t i = 0; i < num_spheres; ++i)
+    extern __shared__ Spheres shared_spheres;
+    for (std::uint32_t i = 0; i < NUM_SPHERES; ++i)
     {
-        shared_spheres[i] = spheres[i];
+        shared_spheres.set(i, *spheres);
     }
     __syncthreads();
 
@@ -172,45 +185,44 @@ __global__ void render(Vec3f* const current_grid, const Sphere* const spheres, c
     const Vec3f dir = Vec3f{x, y, -1.0F}.normalized();
 
     const Vec3f origin{0.0F, 0.0F, 50.0F};
-    current_grid[i*N+j] = cast_ray(origin, dir, shared_spheres, num_spheres, lights, num_spheres);
+    current_grid[i*N+j] = cast_ray(origin, dir, &shared_spheres, lights, num_lights);
 }
 
-__global__ void moveSpheres(Sphere* const spheres, const int num_spheres)
+__global__ void moveSpheres(Spheres* const spheres)
 {
     const int i = blockIdx.x*blockDim.x + threadIdx.x;
-    if (i >= num_spheres)
+    if (i >= NUM_SPHERES)
     {
         return;
     }
 
     Vec3f acceleration{0.0F, 0.0F, 0.0F};
-    for (int j = 0; j < num_spheres; ++j)
+    for (int j = 0; j < NUM_SPHERES; ++j)
     {
         if (i == j)
         {
             continue;
         }
 
-        const Vec3f dist_vec = (spheres[i].center - spheres[j].center);
+        const Vec3f dist_vec = (spheres->center[i] - spheres->center[j]);
         const float r = std::max(dist_vec.norm(), 1.0F);
-        acceleration += dist_vec.normalized() * (1e-1F*spheres[j].radius/(r*r));
+        acceleration += dist_vec.normalized() * (1e-1F*spheres->radius[j]/(r*r));
     }
 
     acceleration = -acceleration;
 
     __syncthreads();
-    spheres[i].velocity += acceleration;
-    spheres[i].center += spheres[i].velocity + spheres[i].acceleration*0.5F;
+    spheres->velocity[i] += acceleration;
+    spheres->center[i] += spheres->velocity[i] + spheres->acceleration[i]*0.5F;
 }
 
 class TinyRayTracer : public GridInterface<Vec3f>
 {
 public:
-    TinyRayTracer(const std::uint32_t rows, const std::uint32_t cols, Vec3f* const h_grid, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) : 
+    TinyRayTracer(const std::uint32_t rows, const std::uint32_t cols, Vec3f* const h_grid, const Spheres& spheres, const std::vector<Light>& lights) : 
         GridInterface<Vec3f>(rows, cols, h_grid)
-    {    
-        m_num_spheres = spheres.size();
-        m_spheres_size = m_num_spheres*sizeof(Sphere);
+    {
+        m_spheres_size = sizeof(Spheres);
 
         m_num_lights = lights.size();
         m_lights_size = m_num_lights*sizeof(Light);
@@ -218,7 +230,7 @@ public:
         cudaCheckError(cudaMalloc((void**)&m_d_spheres, m_spheres_size));
         cudaCheckError(cudaMalloc((void**)&m_d_lights, m_lights_size));
         
-        cudaCheckError(cudaMemcpy(m_d_spheres, spheres.data(), m_spheres_size, cudaMemcpyHostToDevice));
+        cudaCheckError(cudaMemcpy(m_d_spheres, &spheres, m_spheres_size, cudaMemcpyHostToDevice));
         cudaCheckError(cudaMemcpy(m_d_lights, lights.data(), m_lights_size, cudaMemcpyHostToDevice));
     }
 
@@ -227,10 +239,10 @@ public:
         Timer timer{"tinyraytracer"};
         const dim3 block_dim{16, 16, 1};
         const dim3 grid_dim{m_rows / block_dim.x, m_cols / block_dim.y, 1};
-        render<<<grid_dim, block_dim, m_num_spheres*sizeof(Sphere)>>>(m_d_current_grid, m_d_spheres, m_rows, m_num_spheres, m_d_lights, m_num_lights);
+        render<<<grid_dim, block_dim, m_spheres_size>>>(m_d_current_grid, m_d_spheres, m_rows, m_d_lights, m_num_lights);
         cudaCheckError(cudaPeekAtLastError());
 
-        moveSpheres<<<1, m_num_spheres>>>(m_d_spheres, m_num_spheres);
+        moveSpheres<<<1, NUM_SPHERES>>>(m_d_spheres);
 
         //std::swap(m_d_current_grid, m_d_next_grid);
 
@@ -246,9 +258,8 @@ public:
     }
 
 private:
-    Sphere* m_d_spheres;
+    Spheres* m_d_spheres;
     Light* m_d_lights;
-    std::uint32_t m_num_spheres;
     std::uint32_t m_spheres_size;
     std::uint32_t m_num_lights;
     std::uint32_t m_lights_size;
@@ -274,13 +285,12 @@ int main()
 
     constexpr std::uint32_t rows{1024};
     constexpr std::uint32_t cols{rows};
-    constexpr std::uint32_t num_spheres{50};
+    constexpr std::uint32_t num_spheres{100};
 
     Vec3f* const h_grid{nullptr};
     cudaCheckError(cudaHostAlloc((void**)&h_grid, rows*cols*sizeof(Vec3f), cudaHostAllocDefault));
 
-    std::vector<Sphere> spheres;
-    spheres.reserve(num_spheres);
+    Spheres spheres;
     for (int i = 0; i < num_spheres; ++i)
     {
         const Vec3f position = getRandomVec()*50.0F - 25.0F;
@@ -290,8 +300,8 @@ int main()
         const Vec3f albedo = getRandomVec();
         const float specular = 200.0*getRandomFloat();
         const float radius = 5.0*getRandomFloat();
-
-        spheres.emplace_back(position, velocity, acceleration, radius, Material{color, albedo, specular});
+        
+        spheres.set(i, position, velocity, acceleration, radius, Material{color, albedo, specular});
     }
 
     std::vector<Light> lights;

@@ -1,9 +1,11 @@
 #include <cuda_fun/cuda_utils.hpp>
 #include <cuda_fun/GridInterface.hpp>
 #include <cuda_fun/GridVisualizer.hpp>
-#include <cuda_fun/Vector.hpp>
-#include <cuda_fun/Sphere.hpp>
+#include <cuda_fun/Light.hpp>
+#include <cuda_fun/Material.hpp>
+#include <cuda_fun/Spheres.hpp>
 #include <cuda_fun/Timer.hpp>
+#include <cuda_fun/Vector.hpp>
 
 #include <cmath>
 #include <ctime>
@@ -14,93 +16,6 @@
 namespace cuda_fun
 {
 
-constexpr std::uint32_t NUM_SPHERES{100U};
-
-struct Material
-{
-    __host__ __device__ Material(const Vec3f& color, const Vec3f& a, const float s) : 
-        diffuse_color{color},
-        albedo{a},
-        specular_exponent{s}
-    {}
-
-    __host__ __device__ Material() : 
-        diffuse_color{},
-        albedo{},
-        specular_exponent{0.0}
-    {}
-
-    Vec3f diffuse_color;
-    Vec3f albedo;
-    float specular_exponent;
-};
-
-struct Light
-{
-    Light(const Vec3f& p, const float i) :
-        position{p},
-        intensity{i}
-    {}
-
-    Vec3f position;
-    float intensity;
-};
-
-struct Spheres
-{
-    Vec3f center[NUM_SPHERES];
-    Vec3f velocity[NUM_SPHERES];
-    Vec3f acceleration[NUM_SPHERES];
-    float radius[NUM_SPHERES];
-    Material material[NUM_SPHERES];
-
-    __host__ __device__ void set(const std::uint32_t i, const Vec3f& c, const Vec3f& v, const Vec3f& a, const float r, const Material& m)
-    {
-        center[i] = c;
-        velocity[i] = v;
-        acceleration[i] = a;
-        radius[i] = r;
-        material[i] = m;
-    }
-
-    __host__ __device__ void set(const std::uint32_t i, const Spheres& spheres)
-    {
-        center[i] = spheres.center[i];
-        velocity[i] = spheres.velocity[i];
-        acceleration[i] = spheres.acceleration[i];
-        radius[i] = spheres.radius[i];
-        material[i] = spheres.material[i];
-    }
-
-    __host__ __device__ bool ray_intersect(const std::uint32_t i, const Vec3f& orig, const Vec3f& dir, float& t0) const 
-    {
-        const Vec3f L = center[i] - orig;
-        const float tca = L*dir;
-        const float d2 = L*L - tca*tca;
-        const float r = radius[i];
-        if (d2 > r*r)
-        {
-            return false;
-        }
-
-        const float thc = sqrtf(r*r - d2);
-        const float t1 = tca + thc;
-
-        t0 = tca - thc;
-        if (t0 < 0)
-        {
-            t0 = t1;
-        }
-
-        if (t0 < 0)
-        {
-            return false;
-        }
-
-        return true;
-    }
-};
-
 __host__ __device__ Vec3f reflect(const Vec3f& I, const Vec3f& N)
 {
     return I - N*2.0F*(I*N);
@@ -108,8 +23,8 @@ __host__ __device__ Vec3f reflect(const Vec3f& I, const Vec3f& N)
 
 __host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const Spheres* const spheres, Vec3f& hit, Vec3f& N, Material& material) {
     float spheres_dist = std::numeric_limits<float>::max();
-    for (int i = 0; i < NUM_SPHERES; ++i) {
-        float dist_i;
+    for (std::uint32_t i = 0; i < NUM_SPHERES; ++i) {
+        float dist_i{0.0F};
         if (spheres->ray_intersect(i, orig, dir, dist_i) && dist_i < spheres_dist) {
             spheres_dist = dist_i;
             hit = orig + dir*dist_i;
@@ -122,9 +37,10 @@ __host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, co
 }
 
 template<std::uint32_t depth = 0>
-__host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Spheres* const spheres, const Light* const lights, const int num_lights) 
+__host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Spheres* const spheres, const Light* const lights, const std::uint32_t num_lights) 
 {
-    Vec3f point, N;
+    Vec3f point;
+    Vec3f N;
     Material material;
 
     float sphere_dist = std::numeric_limits<float>::max();
@@ -157,12 +73,12 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
 }
 
 template<>
-__host__ __device__ Vec3f cast_ray<4>(const Vec3f &orig, const Vec3f &dir, const Spheres* const spheres, const Light* const lights, const int num_lights) 
+__host__ __device__ Vec3f cast_ray<4>(const Vec3f &orig, const Vec3f &dir, const Spheres* const spheres, const Light* const lights, const std::uint32_t num_lights) 
 {
     return Vec3f{0.8, 0.33, 0.0};
 }
 
-__global__ void render(Vec3f* const current_grid, const Spheres* const spheres, const int N, const Light* const lights, const int num_lights)
+__global__ void render(Vec3f* const current_grid, const Spheres* const spheres, const std::uint32_t N, const Light* const lights, const std::uint32_t num_lights)
 {
     extern __shared__ Spheres shared_spheres;
     for (std::uint32_t i = 0; i < NUM_SPHERES; ++i)
@@ -173,12 +89,8 @@ __global__ void render(Vec3f* const current_grid, const Spheres* const spheres, 
 
     constexpr float fov = 1.0F;
 
-    const int tx = threadIdx.x;
-    const int ty = threadIdx.y;
-    const int bx = blockIdx.x;
-    const int by = blockIdx.y;
-    const int i = by*blockDim.y + ty;
-    const int j = bx*blockDim.x + tx;
+    const std::uint32_t i = blockIdx.y*blockDim.y + threadIdx.y;
+    const std::uint32_t j = blockIdx.x*blockDim.x + threadIdx.x;
 
     const float x =  (2.0F*(i + 0.5F)/static_cast<float>(N) - 1.0F)*tanf(fov/2.0F)*N/static_cast<float>(N);
     const float y = -(2.0F*(j + 0.5F)/static_cast<float>(N) - 1.0F)*tanf(fov/2.0F);
@@ -190,14 +102,14 @@ __global__ void render(Vec3f* const current_grid, const Spheres* const spheres, 
 
 __global__ void moveSpheres(Spheres* const spheres)
 {
-    const int i = blockIdx.x*blockDim.x + threadIdx.x;
+    const std::uint32_t i = blockIdx.x*blockDim.x + threadIdx.x;
     if (i >= NUM_SPHERES)
     {
         return;
     }
 
     Vec3f acceleration{0.0F, 0.0F, 0.0F};
-    for (int j = 0; j < NUM_SPHERES; ++j)
+    for (std::uint32_t j = 0; j < NUM_SPHERES; ++j)
     {
         if (i == j)
         {
@@ -275,7 +187,7 @@ Vec3f getRandomVec()
     return Vec3f{getRandomFloat(), getRandomFloat(), getRandomFloat()}.normalized();
 }
 
-}
+} // namespace cuda_fun
 
 int main()
 {
@@ -285,13 +197,13 @@ int main()
 
     constexpr std::uint32_t rows{1024};
     constexpr std::uint32_t cols{rows};
-    constexpr std::uint32_t num_spheres{100};
 
     Vec3f* const h_grid{nullptr};
     cudaCheckError(cudaHostAlloc((void**)&h_grid, rows*cols*sizeof(Vec3f), cudaHostAllocDefault));
 
+    // SoA performs ~88% better than AoS here
     Spheres spheres;
-    for (int i = 0; i < num_spheres; ++i)
+    for (std::uint32_t i = 0; i < NUM_SPHERES; ++i)
     {
         const Vec3f position = getRandomVec()*50.0F - 25.0F;
         const Vec3f velocity = getRandomVec()*0.05F- 0.025F;

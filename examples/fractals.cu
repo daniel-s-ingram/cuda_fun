@@ -27,7 +27,7 @@ __global__ void fractal(Vec3f* const d_grid, const std::size_t N, const float po
     const Complex c{x, y};
     std::size_t k{0U};
     Complex z{0.0F, 0.0F};
-    while ((z.getReal() < 4.0) && (k++ < MAX_ITERATIONS))
+    while ((z.real() < 4.0) && (k++ < MAX_ITERATIONS))
     {
         z = powf(z, power) + c;
     }

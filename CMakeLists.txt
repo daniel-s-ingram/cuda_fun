@@ -7,12 +7,8 @@ find_package(CUDA REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
-#set(CMAKE_CXX_STANDARD 14)
-#set(CMAKE_CUDA_STANDARD 14)
-#set(CMAKE_CXX_STANDARD_REQUIRED true)
-#set(CMAKE_CUDA_STANDARD_REQUIRED true)
-set(CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
-set(CUDA_NVCC_FLAGS "--expt-relaxed-constexpr ${CUDA_NVCC_FLAGS}")
+set(CMAKE_CXX_FLAGS "-std=c++17 ${CMAKE_CXX_FLAGS}")
+set(CUDA_NVCC_FLAGS "-std=c++17 --expt-relaxed-constexpr ${CUDA_NVCC_FLAGS}")
 
 cuda_add_library(cuda_fun 
     src/GridInterface.cu

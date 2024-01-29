@@ -76,8 +76,8 @@ int main()
     std::srand(std::time(nullptr));
     constexpr std::uint32_t rows{1024U};
     constexpr std::uint32_t cols{rows};
-    constexpr std::uint32_t num_particles{10000U};
-    constexpr float dt{1e-2};
+    constexpr std::uint32_t num_particles{20000U};
+    constexpr float dt{5e-2};
 
     if (!glfwInit())
     {
@@ -98,9 +98,9 @@ int main()
         particles.acc[i][1] = 0.0F;
     }
 
-    glOrtho(-100, 100, -100, 100, 0, 1);
+    glOrtho(-200, 200, -200, 200, 0, 1);
     glColor4f(1.0F, 1.0F, 0.0F, 1.0F);
-    glPointSize(4.0F);
+    glPointSize(1.0F);
 
     Particle<num_particles>* d_particles{nullptr};
     cudaCheckError(cudaMalloc((void**)&d_particles, sizeof(Particle<num_particles>)));

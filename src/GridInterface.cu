@@ -1,3 +1,4 @@
+#include <cuda_fun/cuda_utils.hpp>
 #include <cuda_fun/GridInterface.hpp>
 #include <cuda_fun/Vector.hpp>
 
@@ -6,18 +7,6 @@
 #include <stdio.h>
 
 #include <iostream>
-
-#define cudaCheckError(code) { cudaAssert((code), __FILE__, __LINE__); }
-inline void cudaAssert(cudaError_t code, const char *file, int line)
-{
-    if (code == cudaSuccess) 
-    {
-        return;
-    }
-
-    printf("%s in file %s on line %d\n\n", cudaGetErrorString(code), file, line);
-    exit(1);
-}
 
 namespace cuda_fun
 {

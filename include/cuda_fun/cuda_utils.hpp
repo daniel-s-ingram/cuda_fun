@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cuda.h>
 
-#define cudaCheckError(code) { cudaAssert((code), __FILE__, __LINE__); }
+#define cudaCheckError(code) { cudaAssert(code, __FILE__, __LINE__); }
 inline void cudaAssert(cudaError_t code, const char *file, int line)
 {
     if (code == cudaSuccess) 

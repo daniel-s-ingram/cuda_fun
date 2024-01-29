@@ -177,16 +177,6 @@ private:
     std::uint32_t m_lights_size;
 };
 
-float getRandomFloat()
-{
-    return std::rand()/static_cast<float>(RAND_MAX);
-}
-
-Vec3f getRandomVec()
-{
-    return Vec3f{getRandomFloat(), getRandomFloat(), getRandomFloat()}.normalized();
-}
-
 } // namespace cuda_fun
 
 int main()

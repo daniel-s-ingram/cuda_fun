@@ -28,3 +28,7 @@ target_link_libraries(tinyraytracer cuda_fun)
 cuda_add_executable(fractals examples/fractals.cu)
 target_include_directories(fractals PUBLIC include)
 target_link_libraries(fractals cuda_fun)
+
+cuda_add_executable(nbody examples/nbody.cu)
+target_include_directories(nbody PUBLIC include)
+target_link_libraries(nbody cuda_fun)

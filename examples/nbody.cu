@@ -32,6 +32,10 @@ __global__ void computeAcceleration(Particle* const d_particles, const std::uint
 
     auto& particle = d_particles[i];
 
+    // extern __shared__ Particle shared_particles[];
+    // shared_particles[i] = d_particles[i];
+    // __syncthreads();
+
     Vec2f acc{0.0F, 0.0F};
     for (std::uint32_t j = 0U; j < num_particles; ++j)
     {
@@ -73,7 +77,7 @@ int main()
     std::srand(std::time(nullptr));
     constexpr std::uint32_t rows{1024U};
     constexpr std::uint32_t cols{rows};
-    constexpr std::uint32_t num_particles{4096U};
+    constexpr std::uint32_t num_particles{5000U};
     constexpr float dt{1e-2};
 
     if (!glfwInit())
@@ -87,8 +91,8 @@ int main()
     std::array<Particle, num_particles> particles;
     for (auto& particle : particles)
     {
-        particle.pos[0] = 200.0*(-0.5 + std::rand()/static_cast<float>(RAND_MAX));
-        particle.pos[1] = 200.0*(-0.5 + std::rand()/static_cast<float>(RAND_MAX));
+        particle.pos[0] = 100.0*(-0.5 + std::rand()/static_cast<float>(RAND_MAX));
+        particle.pos[1] = 100.0*(-0.5 + std::rand()/static_cast<float>(RAND_MAX));
     }
 
     glOrtho(-100, 100, -100, 100, 0, 1);
@@ -96,8 +100,10 @@ int main()
     glPointSize(4.0F);
 
     Particle* d_particles{nullptr};
-    cudaMalloc((void**)&d_particles, num_particles*sizeof(Particle));
-    cudaMemcpy(d_particles, particles.data(), num_particles*sizeof(Particle), cudaMemcpyHostToDevice);
+    cudaCheckError(cudaMalloc((void**)&d_particles, num_particles*sizeof(Particle)));
+    cudaCheckError(cudaMemcpy(d_particles, particles.data(), num_particles*sizeof(Particle), cudaMemcpyHostToDevice));
+
+    std::cout << num_particles*sizeof(Particle) << std::endl;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -117,8 +123,10 @@ int main()
         constexpr std::uint32_t num_threads{128U};
         constexpr std::uint32_t num_blocks = std::ceil(num_particles/static_cast<float>(num_threads));
         computeAcceleration<<<num_blocks, num_threads>>>(d_particles, num_particles, dt);
+        cudaCheckError(cudaPeekAtLastError());
         updateParticles<<<num_blocks, num_threads>>>(d_particles, num_particles, dt);
-        cudaMemcpy(particles.data(), d_particles, num_particles*sizeof(Particle), cudaMemcpyDeviceToHost);
+        cudaCheckError(cudaPeekAtLastError());
+        cudaCheckError(cudaMemcpy(particles.data(), d_particles, num_particles*sizeof(Particle), cudaMemcpyDeviceToHost));
     }  
 
     cudaFree(d_particles);

@@ -10,7 +10,7 @@ namespace cuda_fun
 /// @todo make this a template parameter for Spheres as soon as I figure out how to get around the 
 ///       lack of partial template function specialization support since I need the specialization
 ///       to support the recursive cast_ray function, but I also need to pass Spheres to that function
-constexpr std::uint32_t NUM_SPHERES{100U};
+constexpr std::uint32_t NUM_SPHERES{300U};
 
 // AoS is ~88% faster than SoA
 struct Spheres

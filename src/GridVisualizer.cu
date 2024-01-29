@@ -36,10 +36,8 @@ void GridVisualizer::run(std::unique_ptr<GridInterface<T>> grid)
         const auto format = sizeof(T) == 12 ? GL_RGB : GL_GREEN;
         glDrawPixels(m_rows, m_cols, format, GL_FLOAT, h_grid);
 
-        /* Swap front and back buffers */
         glfwSwapBuffers(m_window);
 
-        /* Poll for and process events */
         glfwPollEvents();
 
         grid->update();
@@ -48,7 +46,6 @@ void GridVisualizer::run(std::unique_ptr<GridInterface<T>> grid)
 
 GridVisualizer::~GridVisualizer()
 {
-    // need to free window
     glfwTerminate();
 }
 

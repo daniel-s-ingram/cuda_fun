@@ -53,7 +53,7 @@ struct Vector
 
     __host__ __device__ Vector<Dimension, ElementType> normalized() const 
     { 
-        return (*this) * (static_cast<ElementType>(1.0) / norm()); 
+        return (*this) * (static_cast<ElementType>(1.0) / (norm() + 1e-3F)); 
     }
 
     __host__ __device__ Vector<Dimension, ElementType>& operator+=(const Vector<Dimension, ElementType>& rhs);
@@ -158,7 +158,18 @@ __host__ __device__ Vector<Dimension, ElementType>& Vector<Dimension, ElementTyp
     return *this;
 }
 
+using Vec2f = Vector<2, float>;
 using Vec3f = Vector<3, float>;
+
+inline float getRandomFloat()
+{
+    return std::rand()/static_cast<float>(RAND_MAX);
+}
+
+inline Vec3f getRandomVec()
+{
+    return Vec3f{getRandomFloat(), getRandomFloat(), getRandomFloat()}.normalized();
+}
 
 }
 

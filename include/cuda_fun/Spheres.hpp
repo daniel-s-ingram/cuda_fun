@@ -4,6 +4,8 @@
 #include <cuda_fun/Material.hpp>
 #include <cuda_fun/Vector.hpp>
 
+#include <tuple>
+
 namespace cuda_fun
 {
 
@@ -39,7 +41,7 @@ struct Spheres
         material[i] = spheres.material[i];
     }
 
-    __host__ __device__ bool ray_intersect(const std::uint32_t i, const Vec3f& orig, const Vec3f& dir, float& t0) const 
+    __host__ __device__ std::tuple<bool, float> ray_intersect(const std::uint32_t i, const Vec3f& orig, const Vec3f& dir) const 
     {
         const Vec3f L = center[i] - orig;
         const float tca = L*dir;
@@ -47,24 +49,24 @@ struct Spheres
         const float r = radius[i];
         if (d2 > r*r)
         {
-            return false;
+            return {false, 0.0F};
         }
 
         const float thc = sqrtf(r*r - d2);
+
+        const float t0 = tca - thc;
+        if (t0 > 1e-3F)
+        {
+            return {true, t0};
+        }
+
         const float t1 = tca + thc;
-
-        t0 = tca - thc;
-        if (t0 < 0)
+        if (t1 > 1e-3F)
         {
-            t0 = t1;
+            return {true, t1};
         }
 
-        if (t0 < 0)
-        {
-            return false;
-        }
-
-        return true;
+        return {false, 0.0F};
     }
 };
 

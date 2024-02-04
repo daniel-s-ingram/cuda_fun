@@ -4,7 +4,6 @@
 #include <cuda_fun/Light.hpp>
 #include <cuda_fun/Material.hpp>
 #include <cuda_fun/Spheres.hpp>
-#include <cuda_fun/Timer.hpp>
 #include <cuda_fun/Vector.hpp>
 
 #include <cmath>
@@ -21,36 +20,37 @@ __host__ __device__ Vec3f reflect(const Vec3f& I, const Vec3f& N)
     return I - N*2.0F*(I*N);
 }
 
-__host__ __device__ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const Spheres* const spheres, Vec3f& hit, Vec3f& N, Material& material) {
+__host__ __device__ std::tuple<bool, Vec3f, Vec3f, Material> scene_intersect(const Vec3f& orig, const Vec3f& dir, const Spheres* const spheres)
+{
+    Vec3f pt;
+    Vec3f N;
+    Material material;
+
     float spheres_dist = std::numeric_limits<float>::max();
     for (std::uint32_t i = 0; i < NUM_SPHERES; ++i) {
-        float dist_i{0.0F};
-        if (spheres->ray_intersect(i, orig, dir, dist_i) && dist_i < spheres_dist) {
-            spheres_dist = dist_i;
-            hit = orig + dir*dist_i;
-            N = (hit - spheres->center[i]).normalized();
+        if (const auto [intersects, dist] = spheres->ray_intersect(i, orig, dir); intersects && dist < spheres_dist)
+        {
+            spheres_dist = dist;
+            pt = orig + dir*dist;
+            N = (pt - spheres->center[i]).normalized();
             material = spheres->material[i];
         }
     }
     
-    return spheres_dist<1000;
+    return {spheres_dist < 1000.0F, pt, N, material};
 }
 
 template<std::uint32_t depth = 0>
 __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Spheres* const spheres, const Light* const lights, const std::uint32_t num_lights) 
 {
-    Vec3f point;
-    Vec3f N;
-    Material material;
-
-    float sphere_dist = std::numeric_limits<float>::max();
-    if (!scene_intersect(orig, dir, spheres, point, N, material))
+    const auto [hit, point, N, material] = scene_intersect(orig, dir, spheres);
+    if (!hit)
     {
         return Vec3f{0.8F, 0.33F, 0.0F};
     }
 
     const Vec3f reflect_dir = reflect(dir, N).normalized();
-    const Vec3f reflect_orig = reflect_dir*N < 0 ? (point - N*1e-3) : (point + N*1e-3);
+    const Vec3f reflect_orig = reflect_dir*N < 0 ? (point - N*1e-3F) : (point + N*1e-3F);
     const Vec3f reflect_color = cast_ray<depth+1>(reflect_orig, reflect_dir, spheres, lights, num_lights);
 
     float diffuse_light_intensity{0.0F};
@@ -60,10 +60,11 @@ __host__ __device__ Vec3f cast_ray(const Vec3f &orig, const Vec3f &dir, const Sp
         const float light_distance = (lights[i].position - point).norm();
 
         const Vec3f shadow_orig = light_dir*N < 0.0F ? (point - N*1e-3F) : (point + N*1e-3F);
-        Vec3f shadow_pt, shadow_N;
-        Material tmpmaterial;
-        if (scene_intersect(shadow_orig, light_dir, spheres, shadow_pt, shadow_N, tmpmaterial) && (shadow_pt - shadow_orig).norm() < light_distance)
+        const auto [hit, shadow_pt, N_temp, materials_temp] = scene_intersect(shadow_orig, light_dir, spheres);
+        if (hit && (shadow_pt - shadow_orig).norm() < light_distance)
+        {
             continue;
+        }
 
         diffuse_light_intensity += lights[i].intensity * std::max(0.f, light_dir*N);
         specular_light_intensity += std::pow(std::max(0.f, -reflect(-light_dir, N)*dir), material.specular_exponent)*lights[i].intensity;
@@ -148,7 +149,6 @@ public:
 
     void update() override
     {
-        Timer timer{"tinyraytracer"};
         const dim3 block_dim{16, 16, 1};
         const dim3 grid_dim{m_rows / block_dim.x, m_cols / block_dim.y, 1};
         render<<<grid_dim, block_dim, m_spheres_size>>>(m_d_current_grid, m_d_spheres, m_rows, m_d_lights, m_num_lights);

@@ -15,13 +15,17 @@ struct Vector
     ElementType elements[Dimension];
 
     Vector() = default;
+    Vector(const Vector&) = default;
+    Vector(Vector&&) = default;
+    Vector& operator=(const Vector&) = default;
+    Vector& operator=(Vector&&) = default;
+    ~Vector() = default;
 
-    template<typename... Elements>
-    __host__ __device__ Vector(Elements&&... args)
+    __host__ __device__ Vector(const std::initializer_list<ElementType>& args)
     {
-        static_assert(sizeof...(Elements) == Dimension);
+        assert(args.size() == Dimension);
         std::size_t idx{0};
-        for (const auto& arg : {args...})
+        for (const auto& arg : args)
         {
             elements[idx++] = arg;
         }
@@ -53,7 +57,7 @@ struct Vector
 
     __host__ __device__ Vector<Dimension, ElementType> normalized() const 
     { 
-        return (*this) * (static_cast<ElementType>(1.0) / (norm() + 1e-3F)); 
+        return (*this) * (static_cast<ElementType>(1.0) / norm()); 
     }
 
     __host__ __device__ Vector<Dimension, ElementType>& operator+=(const Vector<Dimension, ElementType>& rhs);
